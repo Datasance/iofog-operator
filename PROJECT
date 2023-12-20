@@ -2,7 +2,7 @@ domain: iofog.org
 layout: go.kubebuilder.io/v2
 multigroup: true
 projectName: iofog-operator
-repo: github.com/eclipse-iofog/iofog-operator
+repo: github.com/datasance/iofog-operator
 resources:
 - kind: Application
   version: v3

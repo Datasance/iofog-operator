@@ -1,4 +1,4 @@
-module github.com/eclipse-iofog/iofog-operator/v3
+module github.com/datasance/iofog-operator/v3
 
 go 1.18
 

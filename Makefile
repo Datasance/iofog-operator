@@ -1,7 +1,7 @@
 OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
-PREFIX = github.com/eclipse-iofog/iofog-operator/v3/internal/util
+PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).portManagerTag=v3.0.0-beta1
 LDFLAGS += -X $(PREFIX).kubeletTag=v3.0.0-beta1
 LDFLAGS += -X $(PREFIX).proxyTag=v3.0.0-beta1

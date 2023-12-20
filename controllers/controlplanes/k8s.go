@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
-	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

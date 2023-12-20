@@ -21,7 +21,7 @@ import (
 
 	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
 	op "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s/operator"
-	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/go-logr/logr"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
