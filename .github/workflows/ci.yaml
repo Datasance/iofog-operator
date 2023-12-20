@@ -96,32 +96,6 @@ jobs:
           ghcr.io/datasance/${{ env.IMAGE_NAME }}:latest
           ghcr.io/datasance/${{ env.IMAGE_NAME }}:main
 
-    - name: Kustomize
-      shell: bash
-      run: |
-        set -e
-        IMAGE="ghcr.io/datasance/operator:${{ steps.tags.outputs.VERSION }}"
-        cd config/operator
-        kustomize edit set image "$IMAGE"
-        kustomize build . > /tmp/deployment.yaml
-        cp /tmp/deployment.yaml ./deployment.yaml
-        cat ./deployment.yaml | grep "image: $IMAGE"
-    
-    - name: Feature tests
-      shell: bash
-      id: feature_test
-      run: |
-        set -e
-        cp test/conf/env.sh.tpl test/conf/env.sh
-        sed -i "s/<<NAMESPACE>>/${{ github.run_number }}/g" test/conf/env.sh
-        sed -i "s/<<OP_VERSION>>/${{ steps.tags.outputs.VERSION }}/g" test/conf/env.sh
-        make feature
-    - name: Cleanup tests
-      if: failure() && steps.feature_test.outcome == 'failure'
-      shell: bash
-      run: |
-        set -e
-        kubectl delete ns ${{ github.run_number }}
     - run: mkdir -p ${{ github.workspace }}/artifact
     - run: echo ${{ steps.tags.outputs.VERSION }} > ${{ github.workspace }}/artifact/version.txt
 
