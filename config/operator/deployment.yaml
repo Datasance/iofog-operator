@@ -20,7 +20,7 @@ spec:
         - iofog-operator
         args:
         - --enable-leader-election
-        image: gcr.io/focal-freedom-236620/operator:develop
+        image: ghcr.io/datasance/operator:latest
         imagePullPolicy: Always
         name: iofog-operator
         env:
