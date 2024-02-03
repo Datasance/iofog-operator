@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v3
+package v1
 
 import (
-	"github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/apps"
+	"github.com/datasance/iofog-go-sdk/v3/pkg/apps"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

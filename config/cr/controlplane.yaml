@@ -1,4 +1,4 @@
-apiVersion: iofog.org/v3
+apiVersion: datasance.com/v1
 kind: ControlPlane
 metadata:
   name: iofog
@@ -8,6 +8,7 @@ spec:
     surname: "Radinovich"
     email: "serge@edgeworx.io"
     password: "FDJLhu98buisdkj"
+    subscriptionKey: "XXXX-XXXX-XXXX-XXXX"
   services:
     controller:
       type: LoadBalancer
