@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"reflect"
 
-	appsv1 "github.com/datasance/iofog-operator/v3/apis/apps/v1"
+	appsv3 "github.com/datasance/iofog-operator/v3/apis/apps/v3"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,13 +42,13 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=datasance.com,resources=applications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=datasance.com,resources=applications/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=iofog.org,resources=applications,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=iofog.org,resources=applications/status,verbs=get;update;patch
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("application", request.NamespacedName)
 
-	instance := &appsv1.Application{}
+	instance := &appsv3.Application{}
 
 	err := r.Client.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
@@ -128,7 +128,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, request ctrl.Requ
 
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.Application{}).
+		For(&appsv3.Application{}).
 		Complete(r)
 }
 
@@ -147,7 +147,7 @@ func labelsForIOFog(name string) map[string]string {
 	}
 }
 
-func (r *ApplicationReconciler) deploymentForApp(app *appsv1.Application) (*appsv1.Deployment, error) {
+func (r *ApplicationReconciler) deploymentForApp(app *appsv3.Application) (*appsv1.Deployment, error) {
 	labels := labelsForIOFog(app.Name)
 
 	microservices, err := json.Marshal(app.Spec.Microservices)

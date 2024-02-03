@@ -21,7 +21,7 @@ import (
 
 	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
-	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/go-logr/logr"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,11 +35,11 @@ type ControlPlaneReconciler struct {
 	Log    logr.Logger
 	log    logr.Logger
 	Scheme *runtime.Scheme
-	cp     cpv1.ControlPlane
+	cp     cpv3.ControlPlane
 }
 
-// +kubebuilder:rbac:groups=datasance.com,resources=controlplanes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=datasance.com,resources=controlplanes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=iofog.org,resources=controlplanes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=iofog.org,resources=controlplanes/status,verbs=get;update;patch
 
 func (r *ControlPlaneReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	r.log = r.Log.WithValues("controlplane", request.NamespacedName)
@@ -77,6 +77,6 @@ func (r *ControlPlaneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cpv1.ControlPlane{}).
+		For(&cpv3.ControlPlane{}).
 		Complete(r)
 }

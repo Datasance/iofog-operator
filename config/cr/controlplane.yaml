@@ -1,4 +1,4 @@
-apiVersion: datasance.com/v1
+apiVersion: iofog.org/v3
 kind: ControlPlane
 metadata:
   name: iofog

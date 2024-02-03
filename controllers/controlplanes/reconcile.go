@@ -11,7 +11,7 @@ import (
 	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	k8sclient "github.com/datasance/iofog-go-sdk/v3/pkg/k8s"
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
-	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	"github.com/skupperproject/skupper-cli/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
@@ -227,7 +227,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	}
 
 	// Get Router or Router Proxy
-	var routerProxy cpv1.RouterIngress
+	var routerProxy cpv3.RouterIngress
 
 	if strings.EqualFold(r.cp.Spec.Services.Router.Type, string(corev1.ServiceTypeLoadBalancer)) {
 		//nolint:contextcheck // k8sClient unfortunately does not accept context
@@ -236,7 +236,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 			return op.ReconcileWithError(err)
 		}
 
-		routerProxy = cpv1.RouterIngress{
+		routerProxy = cpv3.RouterIngress{
 			Address:      routerAddr,
 			MessagePort:  router.MessagePort,
 			InteriorPort: router.InteriorPort,
@@ -286,7 +286,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 }
 
 func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogclient.Client, op.Reconciliation) {
-	baseURL := fmt.Sprintf("http://%s:%d/api/v1", host, port) //nolint:nosprintfhostport
+	baseURL := fmt.Sprintf("http://%s:%d/api/v3", host, port) //nolint:nosprintfhostport
 
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {

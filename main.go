@@ -20,8 +20,8 @@ import (
 	"flag"
 	"os"
 
-	appsv1 "github.com/datasance/iofog-operator/v3/apis/apps/v1"
-	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
+	appsv3 "github.com/datasance/iofog-operator/v3/apis/apps/v3"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	appscontroller "github.com/datasance/iofog-operator/v3/controllers/apps"
 	controlplanescontroller "github.com/datasance/iofog-operator/v3/controllers/controlplanes"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,8 +38,8 @@ var scheme = runtime.NewScheme() //nolint:gochecknoglobals
 func init() { //nolint:gochecknoinits
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(appsv1.AddToScheme(scheme))
-	utilruntime.Must(cpv1.AddToScheme(scheme))
+	utilruntime.Must(appsv3.AddToScheme(scheme))
+	utilruntime.Must(cpv3.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 } //nolint:wsl
 
@@ -73,7 +73,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "44586fd0.datasance.com",
+		LeaderElectionID:   "44586fd0.iofog.org",
 		Namespace:          getWatchNamespace(),
 	})
 	if err != nil {

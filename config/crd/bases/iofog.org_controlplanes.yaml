@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: controlplanes.datasance.com
+  name: controlplanes.iofog.org
 spec:
-  group: datasance.com
+  group: iofog.org
   names:
     kind: ControlPlane
     listKind: ControlPlaneList
@@ -15,7 +15,7 @@ spec:
     singular: controlplane
   scope: Namespaced
   versions:
-  - name: v1
+  - name: v3
     schema:
       openAPIV3Schema:
         description: ControlPlane is the Schema for the controlplanes API

@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: applications.datasance.com
+  name: applications.iofog.org
 spec:
-  group: datasance.com
+  group: iofog.org
   names:
     kind: Application
     listKind: ApplicationList
@@ -15,7 +15,7 @@ spec:
     singular: application
   scope: Namespaced
   versions:
-  - name: v1
+  - name: v3
     schema:
       openAPIV3Schema:
         description: Application is the Schema for the applications API
