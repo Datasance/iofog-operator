@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	"github.com/datasance/iofog-operator/v3/internal/util"
 	corev1 "k8s.io/api/core/v1"
@@ -85,7 +85,7 @@ type controllerMicroserviceConfig struct {
 	imagePullSecret   string
 	serviceType       string
 	loadBalancerAddr  string
-	db                *cpv3.Database
+	db                *cpv1.Database
 	proxyImage        string
 	routerImage       string
 	portProvider      string
@@ -187,7 +187,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/api/v3/status",
+							Path: "/api/v1/status",
 							Port: intstr.FromInt(51121), //nolint:gomnd
 						},
 					},

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v3
+package v1
 
 import (
 	"fmt"
@@ -93,6 +93,7 @@ type User struct {
 	Surname  string `json:"surname"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	subscriptionKey string `json:"subscriptionKey"`
 }
 
 type RouterIngress struct {

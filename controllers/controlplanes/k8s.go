@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
-	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
+	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -374,6 +374,7 @@ func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client
 		Surname:  r.cp.Spec.User.Surname,
 		Email:    r.cp.Spec.User.Email,
 		Password: r.cp.Spec.User.Password,
+		subscriptionKey: r.cp.Spec.User.subscriptionKey,
 	}
 
 	password, err := DecodeBase64(user.Password)
@@ -425,7 +426,7 @@ func newInt(val int) *int {
 	return &val
 }
 
-func (r *ControlPlaneReconciler) createDefaultRouter(iofogClient *iofogclient.Client, proxy cpv3.RouterIngress) (err error) {
+func (r *ControlPlaneReconciler) createDefaultRouter(iofogClient *iofogclient.Client, proxy cpv1.RouterIngress) (err error) {
 	routerConfig := iofogclient.Router{
 		Host: proxy.Address,
 		RouterConfig: iofogclient.RouterConfig{

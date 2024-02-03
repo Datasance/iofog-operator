@@ -1,8 +1,8 @@
 package apis
 
 import (
-	appsv3 "github.com/datasance/iofog-operator/v3/apis/apps/v3"
-	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	appsv1 "github.com/datasance/iofog-operator/v3/apis/apps/v1"
+	cpv1 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v1"
 	extsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,7 +11,7 @@ import (
 )
 
 func NewControlPlaneCustomResource() *extsv1.CustomResourceDefinition {
-	apiVersions := []string{"v3", "v2"}
+	apiVersions := []string{"v3", "v2", "v1"}
 	versions := make([]extsv1.CustomResourceDefinitionVersion, len(apiVersions))
 	preserveUnknownFields := true
 
@@ -37,10 +37,10 @@ func NewControlPlaneCustomResource() *extsv1.CustomResourceDefinition {
 
 	return &extsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "controlplanes.iofog.org",
+			Name: "controlplanes.datasance.com",
 		},
 		Spec: extsv1.CustomResourceDefinitionSpec{
-			Group: "iofog.org",
+			Group: "datasance.com",
 			Names: extsv1.CustomResourceDefinitionNames{
 				Kind:     "ControlPlane",
 				ListKind: "ControlPlaneList",
@@ -80,10 +80,10 @@ func NewAppCustomResource() *extsv1.CustomResourceDefinition {
 
 	return &extsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "apps.iofog.org",
+			Name: "apps.datasance.com",
 		},
 		Spec: extsv1.CustomResourceDefinitionSpec{
-			Group: "iofog.org",
+			Group: "datasance.com",
 			Names: extsv1.CustomResourceDefinitionNames{
 				Kind:     "Application",
 				ListKind: "ApplicationList",
@@ -132,8 +132,8 @@ func InitClientScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(appsv3.AddToScheme(scheme))
-	utilruntime.Must(cpv3.AddToScheme(scheme))
+	utilruntime.Must(appsv1.AddToScheme(scheme))
+	utilruntime.Must(cpv1.AddToScheme(scheme))
 
 	return scheme
 }
