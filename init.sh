@@ -7,5 +7,5 @@ operator-sdk init --domain=datasance.com --repo=github.com/datasance/iofog-opera
 kubebuilder edit --multigroup=true
 
 # NOTE: groups were manually removed after generation
-operator-sdk create api --group apps --version v2 --kind Application --resource=true --controller=true
-operator-sdk create api --group controlplanes --version v2 --kind ControlPlane --resource=true --controller=true
+operator-sdk create api --group apps --version v1 --kind Application --resource=true --controller=true
+operator-sdk create api --group controlplanes --version v1 --kind ControlPlane --resource=true --controller=true
