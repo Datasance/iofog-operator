@@ -11,7 +11,7 @@ import (
 )
 
 func NewControlPlaneCustomResource() *extsv1.CustomResourceDefinition {
-	apiVersions := []string{"v3", "v2"}
+	apiVersions := []string{"v3", "v2", "v1"}
 	versions := make([]extsv1.CustomResourceDefinitionVersion, len(apiVersions))
 	preserveUnknownFields := true
 
