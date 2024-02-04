@@ -8,7 +8,6 @@ spec:
     surname: "Radinovich"
     email: "serge@edgeworx.io"
     password: "FDJLhu98buisdkj"
-    subscriptionKey: "XXXX-XXXX-XXXX-XXXX"
   services:
     controller:
       type: LoadBalancer

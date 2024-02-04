@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
-	k8sclient "github.com/datasance/iofog-go-sdk/v3/pkg/k8s"
-	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
+	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
+	k8sclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s"
+	op "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s/operator"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	"github.com/skupperproject/skupper-cli/pkg/certs"

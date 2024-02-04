@@ -165,14 +165,11 @@ spec:
                     type: string
                   surname:
                     type: string
-                  subscriptionKey:
-                    type: string
                 required:
                 - email
                 - name
                 - password
                 - surname
-                - subscriptionKey
                 type: object
             required:
             - user

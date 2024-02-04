@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
+	op "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s/operator"
 )
 
 type reconcileFunc = func(ctx context.Context) op.Reconciliation

@@ -22,7 +22,7 @@ limitations under the License.
 package v3
 
 import (
-	"github.com/datasance/iofog-go-sdk/v3/pkg/apps"
+	"github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/apps"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
