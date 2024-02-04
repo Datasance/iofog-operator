@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
+	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -374,6 +374,7 @@ func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client
 		Surname:  r.cp.Spec.User.Surname,
 		Email:    r.cp.Spec.User.Email,
 		Password: r.cp.Spec.User.Password,
+		SubscriptionKey: r.cp.Spec.User.SubscriptionKey,
 	}
 
 	password, err := DecodeBase64(user.Password)

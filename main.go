@@ -73,7 +73,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "44586fd0.iofog.org",
+		LeaderElectionID:   "44586fd0.datasance.com",
 		Namespace:          getWatchNamespace(),
 	})
 	if err != nil {

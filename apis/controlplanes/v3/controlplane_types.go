@@ -93,6 +93,7 @@ type User struct {
 	Surname  string `json:"surname"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	SubscriptionKey string `json:"subscriptionKey"`
 }
 
 type RouterIngress struct {

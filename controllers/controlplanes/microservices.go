@@ -187,7 +187,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/api/v3/status",
+							Path: "/api/v1/status",
 							Port: intstr.FromInt(51121), //nolint:gomnd
 						},
 					},

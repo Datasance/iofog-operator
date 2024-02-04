@@ -37,10 +37,10 @@ func NewControlPlaneCustomResource() *extsv1.CustomResourceDefinition {
 
 	return &extsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "controlplanes.iofog.org",
+			Name: "controlplanes.datasance.com",
 		},
 		Spec: extsv1.CustomResourceDefinitionSpec{
-			Group: "iofog.org",
+			Group: "datasance.com",
 			Names: extsv1.CustomResourceDefinitionNames{
 				Kind:     "ControlPlane",
 				ListKind: "ControlPlaneList",
@@ -80,10 +80,10 @@ func NewAppCustomResource() *extsv1.CustomResourceDefinition {
 
 	return &extsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "apps.iofog.org",
+			Name: "apps.datasance.com",
 		},
 		Spec: extsv1.CustomResourceDefinitionSpec{
-			Group: "iofog.org",
+			Group: "datasance.com",
 			Names: extsv1.CustomResourceDefinitionNames{
 				Kind:     "Application",
 				ListKind: "ApplicationList",

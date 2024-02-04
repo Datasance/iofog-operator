@@ -6,7 +6,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - iofog.org
+  - datasance.com
   resources:
   - applications
   verbs:
@@ -18,7 +18,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - iofog.org
+  - datasance.com
   resources:
   - applications/status
   verbs:
@@ -26,7 +26,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - iofog.org
+  - datasance.com
   resources:
   - controlplanes
   verbs:
@@ -38,7 +38,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - iofog.org
+  - datasance.com
   resources:
   - controlplanes/status
   verbs:
