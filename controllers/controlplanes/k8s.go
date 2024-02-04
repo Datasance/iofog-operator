@@ -370,11 +370,11 @@ func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *micr
 
 func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client) error {
 	user := iofogclient.User{
-		Name:     r.cp.Spec.User.Name,
-		Surname:  r.cp.Spec.User.Surname,
-		Email:    r.cp.Spec.User.Email,
-		Password: r.cp.Spec.User.Password,
-		subscriptionKey: r.cp.Spec.User.subscriptionKey,
+		Name:            r.cp.Spec.User.Name,
+		Surname:         r.cp.Spec.User.Surname,
+		Email:           r.cp.Spec.User.Email,
+		Password:        r.cp.Spec.User.Password,
+		SubscriptionKey: r.cp.Spec.User.SubscriptionKey,
 	}
 
 	password, err := DecodeBase64(user.Password)
