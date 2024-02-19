@@ -77,6 +77,7 @@ type container struct {
 	ports           []corev1.ContainerPort
 	resources       corev1.ResourceRequirements
 	volumeMounts    []corev1.VolumeMount
+	securityContext []corev1.securityContext
 }
 
 type controllerMicroserviceConfig struct {
