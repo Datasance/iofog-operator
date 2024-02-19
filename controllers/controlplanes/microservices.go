@@ -197,6 +197,12 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					FailureThreshold:    2,
 				},
 				volumeMounts: []corev1.VolumeMount{},
+				securityContext : []corev1.securityContext{
+					{
+						RunAsUser: &[]int64{0}[0],
+						AllowPrivilegeEscalation: &[]bool{false}[0],
+					},
+				},
 				env: []corev1.EnvVar{
 					{
 						Name:  "DB_PROVIDER",
@@ -319,12 +325,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 								Key: proxyBrokerTokenSecretKey,
 							},
 						},
-					},
-				},
-				SecurityContext : []corev1.SecurityContext {
-					{
-						RunAsUser: &[]int64{0}[0],
-						AllowPrivilegeEscalation: &[]bool{false}[0],
 					},
 				},
 				// resources: corev1.ResourceRequirements{
