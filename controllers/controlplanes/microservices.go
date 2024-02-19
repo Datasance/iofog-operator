@@ -323,8 +323,8 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				},
 				SecurityContext : []corev1.SecurityContext {
 					{
-						RunAsUser: int64(0),
-						AllowPrivilegeEscalation: bool(false),
+						RunAsUser: &[]int64{0}[0],
+						AllowPrivilegeEscalation: &[]bool{false}[0],
 					},
 				},
 				// resources: corev1.ResourceRequirements{
