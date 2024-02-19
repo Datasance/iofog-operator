@@ -321,6 +321,12 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						},
 					},
 				},
+				SecurityContext : []corev1.SecurityContext {
+					{
+						RunAsUser:  0,
+						AllowPrivilegeEscalation:  false,
+					},
+				},
 				// resources: corev1.ResourceRequirements{
 				// 	Limits: corev1.ResourceList{
 				// 		"cpu":    resource.MustParse("1800m"),
