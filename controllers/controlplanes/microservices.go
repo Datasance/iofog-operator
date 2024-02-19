@@ -77,7 +77,7 @@ type container struct {
 	ports           []corev1.ContainerPort
 	resources       corev1.ResourceRequirements
 	volumeMounts    []corev1.VolumeMount
-	securityContext []corev1.securityContext
+	SecurityContext []corev1.SecurityContext
 }
 
 type controllerMicroserviceConfig struct {
@@ -198,7 +198,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					FailureThreshold:    2,
 				},
 				volumeMounts: []corev1.VolumeMount{},
-				securityContext : []corev1.securityContext{
+				SecurityContext : []corev1.SecurityContext{
 					{
 						RunAsUser: &[]int64{0}[0],
 						AllowPrivilegeEscalation: &[]bool{false}[0],
