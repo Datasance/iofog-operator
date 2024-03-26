@@ -368,7 +368,7 @@ func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *micr
 	return nil
 }
 
-func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client) error {
+func (r *ControlPlaneReconciler) loginIofogUser(iofogClient *iofogclient.Client) error {
 	user := iofogclient.User{
 		Name:     r.cp.Spec.User.Name,
 		Surname:  r.cp.Spec.User.Surname,
@@ -380,13 +380,6 @@ func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client
 	password, err := DecodeBase64(user.Password)
 	if err == nil {
 		user.Password = password
-	}
-
-	if err := iofogClient.CreateUser(user); err != nil {
-		// If not error about account existing, fail
-		if !strings.Contains(err.Error(), "already an account associated") {
-			return err
-		}
 	}
 
 	// Try to log in

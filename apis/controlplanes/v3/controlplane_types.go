@@ -41,8 +41,10 @@ type ControlPlaneSpec struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// User contains credentials for ioFog Controller
 	User User `json:"user"`
+	// Auth contains Keycloak Client Configuration of Controller and ECN Viewer
+	Auth Auth `json:"auth"`
 	// Database is only used when ioFog Controller is configured to connect to an external DB.
-	Database Database `json:"database,omitempty"`
+	Database Database `json:"database"`
 	// Ingresses allow Router and Port Manager to configure endpoint addresses correctly
 	Ingresses Ingresses `json:"ingresses,omitempty"`
 	// Services should be LoadBalancer unless Ingress is being configured
@@ -77,6 +79,16 @@ type Images struct {
 	PortManager string `json:"portManager,omitempty"`
 	Proxy       string `json:"proxy,omitempty"`
 	PortRouter  string `json:"portRouter,omitempty"`
+}
+
+type Auth struct {
+	URL               string `json:"url"`
+	Realm             string `json:"realm"`
+	SSL               string `json:"ssl"`
+	RealmKey          string `json:"realmKey"`
+	ControllerClient  string `json:"controllerClient"`
+	ControllerSecret  string `json:"controllerSecret"`
+	ViewerClient      string `json:"viewerClient"`
 }
 
 type Database struct {

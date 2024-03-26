@@ -28,19 +28,27 @@ import (
 )
 
 const (
-	routerName                        = "router"
-	controllerName                    = "controller"
-	controllerCredentialsSecretName   = "controller-credentials"
-	emailSecretKey                    = "email"
-	passwordSecretKey                 = "password"
-	controllerDBCredentialsSecretName = "controller-db-credentials" //nolint:gosec
-	controllerDBUserSecretKey         = "username"
-	controllerDBDBNameSecretKey       = "dbname"
-	controllerDBPasswordSecretKey     = "password"
-	controllerDBHostSecretKey         = "host"
-	controllerDBPortSecretKey         = "port"
-	controllerS2STokensSecretName     = "controller-s2s-tokens" //nolint:gosec
-	proxyBrokerTokenSecretKey         = "proxy-broker-token"    //nolint:gosec
+	routerName                                     = "router"
+	controllerName                                 = "controller"
+	controllerCredentialsSecretName                = "controller-credentials"
+	emailSecretKey                                 = "email"
+	passwordSecretKey                              = "password"
+	controlllerAuthCredentialsSecretName           = "controller-auth-credemtials"
+	controlllerAuthUrlSecretKey                    = "auth-url"
+	controlllerAuthRealmSecretKey                  = "auth-realm"
+	controlllerAuthRealmKeySecretKey               = "auth-realm-key"
+	controlllerAuthSSLSecretKey                    = "auth-ssl-req"
+	controlllerAuthControllerClientSecretKey       = "auth-controller-client"
+	controlllerAuthControllerClientSecretSecretKey = "auth-controller-client-secret"
+	controlllerAuthViewerClientSecretKey           = "auth-viewer-client"
+	controllerDBCredentialsSecretName              = "controller-db-credentials" //nolint:gosec
+	controllerDBUserSecretKey                      = "username"
+	controllerDBDBNameSecretKey                    = "dbname"
+	controllerDBPasswordSecretKey                  = "password"
+	controllerDBHostSecretKey                      = "host"
+	controllerDBPortSecretKey                      = "port"
+	controllerS2STokensSecretName                  = "controller-s2s-tokens" //nolint:gosec
+	proxyBrokerTokenSecretKey                      = "proxy-broker-token"    //nolint:gosec
 )
 
 type service struct {
@@ -86,6 +94,7 @@ type controllerMicroserviceConfig struct {
 	imagePullSecret   string
 	serviceType       string
 	loadBalancerAddr  string
+	auth			  *cpv3.Auth
 	db                *cpv3.Database
 	proxyImage        string
 	routerImage       string
@@ -161,11 +170,18 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					Name:      controllerDBCredentialsSecretName,
 				},
 				StringData: map[string]string{
-					controllerDBDBNameSecretKey:   cfg.db.DatabaseName,
-					controllerDBHostSecretKey:     cfg.db.Host,
-					controllerDBPortSecretKey:     strconv.Itoa(cfg.db.Port),
-					controllerDBUserSecretKey:     cfg.db.User,
-					controllerDBPasswordSecretKey: cfg.db.Password,
+					controllerDBDBNameSecretKey:                    cfg.db.DatabaseName,
+					controllerDBHostSecretKey:                      cfg.db.Host,
+					controllerDBPortSecretKey:                      strconv.Itoa(cfg.db.Port),
+					controllerDBUserSecretKey:                      cfg.db.User,
+					controllerDBPasswordSecretKey:                  cfg.db.Password,
+					controlllerAuthUrlSecretKey:                    cfg.auth.URL,                    
+					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,                
+					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,               
+					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,                    
+					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,       
+					controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
+					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,       
 				},
 			},
 			{
@@ -205,6 +221,83 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					},
 				},
 				env: []corev1.EnvVar{
+					{
+						Name: "KC_URL",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthUrlSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_REALM",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthRealmSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_REALM_KEY",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthRealmKeySecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_SSL_REQ",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthSSLSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT_SECRET",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_VIEWER_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthViewerClientSecretKey,
+							},
+						},
+					},
 					{
 						Name:  "DB_PROVIDER",
 						Value: cfg.db.Provider,

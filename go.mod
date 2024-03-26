@@ -3,7 +3,7 @@ module github.com/datasance/iofog-operator/v3
 go 1.18
 
 require (
-	github.com/datasance/iofog-go-sdk/v3 v3.3.5
+	github.com/datasance/iofog-go-sdk/v3 v3.4.1
 	github.com/go-logr/logr v1.2.3
 	github.com/skupperproject/skupper-cli v0.0.1-beta6
 	k8s.io/api v0.26.0
@@ -73,4 +73,7 @@ retract (
     v3.2.1 // Published accidentally.
     v3.2.2 // Published accidentally.
     v3.2.3 // Published accidentally.
+	v3.2.4 // Published accidentally.
+	v3.2.5 // Published accidentally.
+	v3.2.6 // Version updated.
 )
