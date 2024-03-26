@@ -4,7 +4,6 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"fmt"
-	"strings"
 
 	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
