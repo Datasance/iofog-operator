@@ -33,7 +33,7 @@ const (
 	controllerCredentialsSecretName                = "controller-credentials"
 	emailSecretKey                                 = "email"
 	passwordSecretKey                              = "password"
-	controlllerAuthCredentialsSecretName           = "controller-auth-credemtials"
+	controlllerAuthCredentialsSecretName           = "controller-auth-credentials" //nolint:gosec
 	controlllerAuthUrlSecretKey                    = "auth-url"
 	controlllerAuthRealmSecretKey                  = "auth-realm"
 	controlllerAuthRealmKeySecretKey               = "auth-realm-key"
@@ -175,6 +175,22 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					controllerDBPortSecretKey:                      strconv.Itoa(cfg.db.Port),
 					controllerDBUserSecretKey:                      cfg.db.User,
 					controllerDBPasswordSecretKey:                  cfg.db.Password,
+					controlllerAuthUrlSecretKey:                    cfg.auth.URL,                    
+					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,                
+					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,               
+					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,                    
+					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,       
+					controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
+					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,       
+				},
+			},
+			{
+				Type: corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
+					Name:      controlllerAuthCredentialsSecretName,
+				},
+				StringData: map[string]string{
 					controlllerAuthUrlSecretKey:                    cfg.auth.URL,                    
 					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,                
 					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,               
