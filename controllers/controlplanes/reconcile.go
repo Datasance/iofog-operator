@@ -205,21 +205,6 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		return fin
 	}
 
-	// Set up user
-	if err := r.createIofogUser(iofogClient); err != nil {
-		if !strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
-			r.log.Info(fmt.Sprintf("Could not create user for ControlPlane %s: %s", r.cp.Name, err.Error()))
-
-			return op.ReconcileWithRequeue(time.Second * 3) //nolint:gomnd
-		}
-		// If the error is invalid credentials, update user password
-		if err := r.updateIofogUserPassword(ctx, iofogClient); err != nil {
-			r.log.Info(fmt.Sprintf("Could not update user for ControlPlane %s: %s", r.cp.Name, err.Error()))
-
-			return op.ReconcileWithError(err)
-		}
-	}
-
 	// Connect to cluster
 	k8sClient, err := newK8sClient()
 	if err != nil {
