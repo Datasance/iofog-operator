@@ -44,19 +44,13 @@ func (r *ControlPlaneReconciler) restartPodsForDeployment(ctx context.Context, d
 
 	originValue := int32(1)
 	if found.Spec.Replicas == nil {
-		originValue = *found.Spec.Replicas
+		found.Spec.Replicas = &originValue
 	}
-
-	// Set replicas to 0
-	desiredReplicas := int32(0)
-	found.Spec.Replicas = &desiredReplicas
 
 	if err := r.Client.Update(ctx, found); err != nil {
 		return err
 	}
 
-	// Set replicas to previous value
-	found.Spec.Replicas = &originValue
 
 	return r.Client.Update(ctx, found)
 }
