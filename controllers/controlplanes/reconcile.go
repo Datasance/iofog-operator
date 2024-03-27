@@ -205,6 +205,13 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	if fin.IsFinal() {
 		return fin
 	}
+	// Set up user
+	if err := r.loginIofogUser(iofogClient); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
+			r.log.Info(fmt.Sprintf("Could not login to ControlPlane %s: %s", r.cp.Name, err.Error()))
+			return op.ReconcileWithError(err)
+		}
+	}
 
 	// Connect to cluster
 	k8sClient, err := newK8sClient()
