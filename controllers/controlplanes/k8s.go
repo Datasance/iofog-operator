@@ -385,28 +385,7 @@ func (r *ControlPlaneReconciler) loginIofogUser(iofogClient *iofogclient.Client)
 	if err := iofogClient.Login(iofogclient.LoginRequest{
 		Email:    user.Email,
 		Password: user.Password,
-	}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ControlPlaneReconciler) updateIofogUser(iofogClient *iofogclient.Client, oldPassword, newPassword string) error {
-	// Update password
-	if newPassword != "" && newPassword != oldPassword {
-		if err := iofogClient.UpdateUserPassword(iofogclient.UpdateUserPasswordRequest{
-			OldPassword: oldPassword,
-			NewPassword: newPassword,
-		}); err != nil {
-			return err
-		}
-	}
-
-	// Try to log in
-	if err := iofogClient.Login(iofogclient.LoginRequest{
-		Email:    r.cp.Spec.User.Email,
-		Password: newPassword,
+		Totp: "",
 	}); err != nil {
 		return err
 	}
