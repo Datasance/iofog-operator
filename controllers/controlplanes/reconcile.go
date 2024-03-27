@@ -135,6 +135,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		proxyImage:        r.cp.Spec.Images.Proxy,
 		routerImage:       r.cp.Spec.Images.Router,
 		db:                &r.cp.Spec.Database,
+		auth:			   &r.cp.Spec.Auth,
 		serviceType:       r.cp.Spec.Services.Controller.Type,
 		loadBalancerAddr:  r.cp.Spec.Services.Controller.Address,
 		portAllocatorHost: r.cp.Spec.Controller.PortAllocatorHost,
