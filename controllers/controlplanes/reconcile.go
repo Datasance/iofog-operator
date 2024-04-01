@@ -144,7 +144,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		return fin
 	}
 	// Set up user
-	if err := r.loginIofogUser(iofogClient); err != nil {
+	if err := r.loginIofogClient(iofogClient); err != nil {
 		if !strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
 			r.log.Info(fmt.Sprintf("Could not login to ControlPlane %s: %s", r.cp.Name, err.Error()))
 			return op.ReconcileWithError(err)
