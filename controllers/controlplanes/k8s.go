@@ -374,7 +374,8 @@ func (r *ControlPlaneReconciler) loginIofogClient(iofogClient *iofogclient.Clien
 	type LoginResponse struct {
 		AccessToken string `json:"access_token"`
 	}
-
+	
+	mgr.log.Info("Generating Client Access Token")
 	// Construct the URL for token request
 	url := fmt.Sprintf("%srealms/%s/protocol/openid-connect/token", authURL, realm)
 	method := "POST"
