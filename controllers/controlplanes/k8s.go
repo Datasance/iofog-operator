@@ -2,12 +2,12 @@ package controllers
 
 import (
 	"context"
+	"crypto/tls"
 	b64 "encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
-	"crypto/tls"
-	"encoding/json"
 
 	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
@@ -54,7 +54,6 @@ func (r *ControlPlaneReconciler) restartPodsForDeployment(ctx context.Context, d
 	if err := r.Client.Update(ctx, found); err != nil {
 		return err
 	}
-
 
 	return r.Client.Update(ctx, found)
 }
@@ -368,18 +367,18 @@ func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *micr
 func (r *ControlPlaneReconciler) loginIofogClient(iofogClient *iofogclient.Client) error {
 	authURL := r.cp.Spec.Auth.URL
 	realm := r.cp.Spec.Auth.Realm
-	clientId := r.cp.Spec.Auth.ControllerClient
+	clientID := r.cp.Spec.Auth.ControllerClient
 	clientSecret := r.cp.Spec.Auth.ControllerSecret
 
 	type LoginResponse struct {
 		AccessToken string `json:"access_token"`
 	}
-	
-	mgr.log.Info("Generating Client Access Token")
+
+	r.log.Info("Generating Client Access Token")
 	// Construct the URL for token request
 	url := fmt.Sprintf("%srealms/%s/protocol/openid-connect/token", authURL, realm)
 	method := "POST"
-	payload := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientId, clientSecret)
+	payload := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientID, clientSecret)
 
 	// Create HTTP client with custom transport to skip certificate verification
 	tr := &http.Transport{
