@@ -2,8 +2,12 @@ package controllers
 
 import (
 	"context"
+	"crypto/tls"
 	b64 "encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 
 	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
@@ -50,7 +54,6 @@ func (r *ControlPlaneReconciler) restartPodsForDeployment(ctx context.Context, d
 	if err := r.Client.Update(ctx, found); err != nil {
 		return err
 	}
-
 
 	return r.Client.Update(ctx, found)
 }
@@ -361,29 +364,56 @@ func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *micr
 	return nil
 }
 
-func (r *ControlPlaneReconciler) loginIofogUser(iofogClient *iofogclient.Client) error {
-	user := iofogclient.User{
-		Name:     r.cp.Spec.User.Name,
-		Surname:  r.cp.Spec.User.Surname,
-		Email:    r.cp.Spec.User.Email,
-		Password: r.cp.Spec.User.Password,
-		SubscriptionKey: r.cp.Spec.User.SubscriptionKey,
+func (r *ControlPlaneReconciler) loginIofogClient(iofogClient *iofogclient.Client) error {
+	authURL := r.cp.Spec.Auth.URL
+	realm := r.cp.Spec.Auth.Realm
+	clientID := r.cp.Spec.Auth.ControllerClient
+	clientSecret := r.cp.Spec.Auth.ControllerSecret
+
+	type LoginResponse struct {
+		AccessToken string `json:"access_token"`
 	}
 
-	password, err := DecodeBase64(user.Password)
-	if err == nil {
-		user.Password = password
+	r.log.Info("Generating Client Access Token")
+	// Construct the URL for token request
+	url := fmt.Sprintf("%srealms/%s/protocol/openid-connect/token", authURL, realm)
+	method := "POST"
+	payload := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientID, clientSecret)
+
+	// Create HTTP client with custom transport to skip certificate verification
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	// Create request
+	req, err := http.NewRequest(method, url, strings.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	// Send request
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	// Check response status
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", res.StatusCode)
 	}
 
-	// Try to log in
-	if err := iofogClient.Login(iofogclient.LoginRequest{
-		Email:    user.Email,
-		Password: user.Password,
-		Totp: "",
-	}); err != nil {
+	// Read response body
+	var response LoginResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		return err
 	}
 
+	// Assign access token
+	iofogClient.SetAccessToken(response.AccessToken)
 	return nil
 }
 

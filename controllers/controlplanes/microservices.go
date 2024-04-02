@@ -566,24 +566,46 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Value: "port-manager",
 					},
 					{
-						Name: "IOFOG_USER_EMAIL",
+						Name: "KC_URL",
 						ValueFrom: &corev1.EnvVarSource{
 							SecretKeyRef: &corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controllerCredentialsSecretName,
+									Name: controlllerAuthCredentialsSecretName,
 								},
-								Key: emailSecretKey,
+								Key: controlllerAuthUrlSecretKey,
 							},
 						},
 					},
 					{
-						Name: "IOFOG_USER_PASS",
+						Name: "KC_REALM",
 						ValueFrom: &corev1.EnvVarSource{
 							SecretKeyRef: &corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controllerCredentialsSecretName,
+									Name: controlllerAuthCredentialsSecretName,
 								},
-								Key: passwordSecretKey,
+								Key: controlllerAuthRealmSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT_SECRET",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretSecretKey,
 							},
 						},
 					},
