@@ -281,7 +281,7 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
 	// Configure
-	volumeMountPath := "/etc/qpid-dispatch-certs/"
+	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
 	ms := newRouterMicroservice(routerMicroserviceConfig{
 		image:           r.cp.Spec.Images.Router,
 		serviceType:     r.cp.Spec.Services.Router.Type,

@@ -35,9 +35,9 @@ listener {
 
 sslProfile {
     name: router-amqps
-    certFile: /etc/qpid-dispatch-certs/router-amqps/tls.crt
-    privateKeyFile: /etc/qpid-dispatch-certs/router-amqps/tls.key
-    caCertFile: /etc/qpid-dispatch-certs/router-amqps/ca.crt
+    certFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.crt
+    privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.key
+    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/ca.crt
 }
 
 listener {
@@ -53,9 +53,9 @@ listener {
 
 sslProfile {
     name: router-internal
-    certFile: /etc/qpid-dispatch-certs/router-internal/tls.crt
-    privateKeyFile: /etc/qpid-dispatch-certs/router-internal/tls.key
-    caCertFile: /etc/qpid-dispatch-certs/router-internal/ca.crt
+    certFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.crt
+    privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.key
+    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/ca.crt
 }
 
 listener {

@@ -376,7 +376,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					},
 					{
 						Name:  "SystemImages_Proxy_2",
-						Value: util.TransformImageToARM(cfg.proxyImage),
+						Value: cfg.proxyImage,
 					},
 					{
 						Name:  "SystemImages_Router_1",
@@ -707,7 +707,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				image:           cfg.image,
 				imagePullPolicy: "Always",
 				command: []string{
-					"/qpid-dispatch/launch.sh",
+					"/home/skrouterd/bin/launch.sh",
 				},
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
