@@ -13,6 +13,7 @@ import (
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
+	"github.com/datasance/iofog-operator/v3/internal/util"
 	"github.com/skupperproject/skupper-cli/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -86,6 +87,16 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		proxyBrokerToken:  r.cp.Spec.Controller.ProxyBrokerToken,
 		portRouterImage:   r.cp.Spec.Images.PortRouter,
 	}
+	// Create controller database
+	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
+	
+	// Create the database and wait for completion
+	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+		r.log.Error(err, "Failed to create controller database")
+		return op.ReconcileWithError(err)
+	}
+
+	// Create secrets
 	ms := newControllerMicroservice(r.cp.Namespace, config)
 
 	// Service Account

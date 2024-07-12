@@ -13,7 +13,7 @@ COPY ./apis/ ./apis/
 COPY ./internal/ ./internal/
 COPY ./controllers/ ./controllers/
 COPY ./hack/ ./hack/
-
+RUN go mod tidy
 RUN make build
 RUN cp ./bin/iofog-operator /bin
 
