@@ -108,7 +108,39 @@ func createControllerDatabase(host, user, password, provider, dbName string, por
 
 		log.Printf("Seeding SQL executed successfully")
 	} else {
-		log.Printf("Database %s already exists. Skipping migration and seeding.", dbName)
+
+		// Switch to the existing database
+		_, err = db.Exec("USE `" + dbName + "`")
+		if err != nil {
+			return fmt.Errorf("failed to switch to database: %v", err)
+		}
+
+		// Read migration SQL file
+		migrationSQL, err := embeddedFiles.ReadFile("assets/database/db_migration_v1.0.0.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration SQL file: %v", err)
+		}
+
+		// Split SQL script into individual statements
+		migrationStatements := strings.Split(string(migrationSQL), ";")
+
+		// Execute each migration SQL statement individually
+		for _, statement := range migrationStatements {
+			statement = strings.TrimSpace(statement)
+			if statement == "" {
+				continue // Skip empty statements
+			}
+
+			// Execute the SQL statement
+			_, err := db.Exec(statement)
+			if err != nil {
+				return fmt.Errorf("failed to execute migration SQL statement: %v", err)
+			}
+		}
+
+		log.Printf("Migration SQL executed successfully")
+
+		log.Printf("Database %s already exists. Only migration script executed.", dbName)
 	}
 
 	return nil
