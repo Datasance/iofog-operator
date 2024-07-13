@@ -92,7 +92,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
 
 	// Create the database and wait for completion
-	if err := util.createControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
 		r.log.Error(err, "Failed to create controller database")
 		return op.ReconcileWithError(err)
 	}

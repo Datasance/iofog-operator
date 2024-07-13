@@ -13,7 +13,7 @@ import (
 //go:embed assets/database/*
 var embeddedFiles embed.FS
 
-func createControllerDatabase(host, user, password, provider, dbName string, port int) error {
+func CreateControllerDatabase(host, user, password, provider, dbName string, port int) error {
 	// Create MySQL DSN (Data Source Name)
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, password, host, port)
 
