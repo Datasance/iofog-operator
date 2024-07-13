@@ -68,30 +68,31 @@ func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Contex
 func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) op.Reconciliation {
 	// Configure Controller
 	config := &controllerMicroserviceConfig{
-		replicas:          r.cp.Spec.Replicas.Controller,
-		image:             r.cp.Spec.Images.Controller,
-		imagePullSecret:   r.cp.Spec.Images.PullSecret,
-		proxyImage:        r.cp.Spec.Images.Proxy,
-		routerImage:       r.cp.Spec.Images.Router,
-		db:                &r.cp.Spec.Database,
-		auth:			   &r.cp.Spec.Auth,
-		serviceType:       r.cp.Spec.Services.Controller.Type,
-		loadBalancerAddr:  r.cp.Spec.Services.Controller.Address,
-		portAllocatorHost: r.cp.Spec.Controller.PortAllocatorHost,
-		ecn:               r.cp.Spec.Controller.ECNName,
-		pidBaseDir:        r.cp.Spec.Controller.PidBaseDir,
-		ecnViewerPort:     r.cp.Spec.Controller.EcnViewerPort,
-		ecnViewerURL:      r.cp.Spec.Controller.EcnViewerURL,
-		portProvider:      r.cp.Spec.Controller.PortProvider,
-		proxyBrokerURL:    r.cp.Spec.Controller.ProxyBrokerURL,
-		proxyBrokerToken:  r.cp.Spec.Controller.ProxyBrokerToken,
-		portRouterImage:   r.cp.Spec.Images.PortRouter,
+		replicas:           r.cp.Spec.Replicas.Controller,
+		image:              r.cp.Spec.Images.Controller,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		proxyImage:         r.cp.Spec.Images.Proxy,
+		routerImage:        r.cp.Spec.Images.Router,
+		db:                 &r.cp.Spec.Database,
+		auth:               &r.cp.Spec.Auth,
+		serviceType:        r.cp.Spec.Services.Controller.Type,
+		serviceAnnotations: r.cp.Spec.Services.Controller.Annotations,
+		loadBalancerAddr:   r.cp.Spec.Services.Controller.Address,
+		portAllocatorHost:  r.cp.Spec.Controller.PortAllocatorHost,
+		ecn:                r.cp.Spec.Controller.ECNName,
+		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
+		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
+		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
+		portProvider:       r.cp.Spec.Controller.PortProvider,
+		proxyBrokerURL:     r.cp.Spec.Controller.ProxyBrokerURL,
+		proxyBrokerToken:   r.cp.Spec.Controller.ProxyBrokerToken,
+		portRouterImage:    r.cp.Spec.Images.PortRouter,
 	}
 	// Create controller database
 	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
-	
+
 	// Create the database and wait for completion
-	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+	if err := util.createControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
 		r.log.Error(err, "Failed to create controller database")
 		return op.ReconcileWithError(err)
 	}
@@ -251,13 +252,12 @@ func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogcl
 
 func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Reconciliation {
 	ms := newPortManagerMicroservice(&portManagerConfig{
-		image:            r.cp.Spec.Images.PortManager,
-		proxyImage:       r.cp.Spec.Images.Proxy,
-		httpProxyAddress: r.cp.Spec.Ingresses.HTTPProxy.Address,
-		tcpProxyAddress:  r.cp.Spec.Ingresses.TCPProxy.Address,
-		watchNamespace:   r.cp.ObjectMeta.Namespace,
-		userEmail:        r.cp.Spec.User.Email,
-		userPass:         r.cp.Spec.User.Password,
+		image:              r.cp.Spec.Images.PortManager,
+		proxyImage:         r.cp.Spec.Images.Proxy,
+		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
+		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
+		tcpProxyAddress:    r.cp.Spec.Ingresses.TCPProxy.Address,
+		watchNamespace:     r.cp.ObjectMeta.Namespace,
 	})
 
 	// Service Account
@@ -294,9 +294,10 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	// Configure
 	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
 	ms := newRouterMicroservice(routerMicroserviceConfig{
-		image:           r.cp.Spec.Images.Router,
-		serviceType:     r.cp.Spec.Services.Router.Type,
-		volumeMountPath: volumeMountPath,
+		image:              r.cp.Spec.Images.Router,
+		serviceType:        r.cp.Spec.Services.Router.Type,
+		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
+		volumeMountPath:    volumeMountPath,
 	})
 
 	// Service Account

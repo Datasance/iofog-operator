@@ -14,6 +14,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -52,11 +53,12 @@ const (
 )
 
 type service struct {
-	name             string
-	loadBalancerAddr string
-	trafficPolicy    string
-	serviceType      string
-	ports            []int
+	name               string
+	loadBalancerAddr   string
+	trafficPolicy      string
+	serviceType        string
+	serviceAnnotations map[string]string
+	ports              []int
 }
 
 type microservice struct {
@@ -89,24 +91,25 @@ type container struct {
 }
 
 type controllerMicroserviceConfig struct {
-	replicas          int32
-	image             string
-	imagePullSecret   string
-	serviceType       string
-	loadBalancerAddr  string
-	auth			  *cpv3.Auth
-	db                *cpv3.Database
-	proxyImage        string
-	routerImage       string
-	portProvider      string
-	portAllocatorHost string
-	ecn               string
-	pidBaseDir        string
-	ecnViewerPort     int
-	ecnViewerURL      string
-	proxyBrokerURL    string
-	proxyBrokerToken  string
-	portRouterImage   string
+	replicas           int32
+	image              string
+	imagePullSecret    string
+	serviceType        string
+	serviceAnnotations map[string]string
+	loadBalancerAddr   string
+	auth               *cpv3.Auth
+	db                 *cpv3.Database
+	proxyImage         string
+	routerImage        string
+	portProvider       string
+	portAllocatorHost  string
+	ecn                string
+	pidBaseDir         string
+	ecnViewerPort      int
+	ecnViewerURL       string
+	proxyBrokerURL     string
+	proxyBrokerToken   string
+	portRouterImage    string
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -152,10 +155,11 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		replicas:        cfg.replicas,
 		services: []service{
 			{
-				name:             "controller",
-				serviceType:      cfg.serviceType,
-				trafficPolicy:    getTrafficPolicy(cfg.serviceType),
-				loadBalancerAddr: cfg.loadBalancerAddr,
+				name:               "controller",
+				serviceType:        cfg.serviceType,
+				serviceAnnotations: cfg.serviceAnnotations,
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
+				loadBalancerAddr:   cfg.loadBalancerAddr,
 				ports: []int{
 					51121,
 					80,
@@ -170,11 +174,11 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					Name:      controllerDBCredentialsSecretName,
 				},
 				StringData: map[string]string{
-					controllerDBDBNameSecretKey:                    cfg.db.DatabaseName,
-					controllerDBHostSecretKey:                      cfg.db.Host,
-					controllerDBPortSecretKey:                      strconv.Itoa(cfg.db.Port),
-					controllerDBUserSecretKey:                      cfg.db.User,
-					controllerDBPasswordSecretKey:                  cfg.db.Password,     
+					controllerDBDBNameSecretKey:   cfg.db.DatabaseName,
+					controllerDBHostSecretKey:     cfg.db.Host,
+					controllerDBPortSecretKey:     strconv.Itoa(cfg.db.Port),
+					controllerDBUserSecretKey:     cfg.db.User,
+					controllerDBPasswordSecretKey: cfg.db.Password,
 				},
 			},
 			{
@@ -184,13 +188,13 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					Name:      controlllerAuthCredentialsSecretName,
 				},
 				StringData: map[string]string{
-					controlllerAuthUrlSecretKey:                    cfg.auth.URL,                    
-					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,                
-					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,               
-					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,                    
-					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,       
+					controlllerAuthUrlSecretKey:                    cfg.auth.URL,
+					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,
+					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,
+					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,
+					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,
 					controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
-					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,       
+					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,
 				},
 			},
 			{
@@ -223,9 +227,9 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					FailureThreshold:    2,
 				},
 				volumeMounts: []corev1.VolumeMount{},
-				SecurityContext : []corev1.SecurityContext{
+				SecurityContext: []corev1.SecurityContext{
 					{
-						RunAsUser: &[]int64{0}[0],
+						RunAsUser:                &[]int64{0}[0],
 						AllowPrivilegeEscalation: &[]bool{false}[0],
 					},
 				},
@@ -468,13 +472,12 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 }
 
 type portManagerConfig struct {
-	image            string
-	proxyImage       string
-	httpProxyAddress string
-	tcpProxyAddress  string
-	watchNamespace   string
-	userEmail        string
-	userPass         string
+	image              string
+	proxyImage         string
+	serviceAnnotations map[string]string
+	httpProxyAddress   string
+	tcpProxyAddress    string
+	watchNamespace     string
 }
 
 func filterPortManagerConfig(cfg *portManagerConfig) {
@@ -489,6 +492,15 @@ func filterPortManagerConfig(cfg *portManagerConfig) {
 
 func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 	filterPortManagerConfig(cfg)
+
+	// Convert the serviceAnnotations map to a JSON string
+	var serviceAnnotationsJSON string
+	if len(cfg.serviceAnnotations) > 0 {
+		annotations, err := json.Marshal(cfg.serviceAnnotations)
+		if err == nil {
+			serviceAnnotationsJSON = string(annotations)
+		}
+	}
 
 	return &microservice{
 		mustRecreateOnRollout: true,
@@ -510,10 +522,6 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: cfg.watchNamespace,
 					Name:      controllerCredentialsSecretName,
-				},
-				StringData: map[string]string{
-					emailSecretKey:    cfg.userEmail,
-					passwordSecretKey: cfg.userPass,
 				},
 			},
 		},
@@ -625,6 +633,10 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Name:  "ROUTER_ADDRESS",
 						Value: routerName,
 					},
+					{
+						Name:  "PROXY_SERVICE_ANNOTATIONS",
+						Value: string(serviceAnnotationsJSON),
+					},
 				},
 			},
 		},
@@ -632,9 +644,10 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 }
 
 type routerMicroserviceConfig struct {
-	image           string
-	serviceType     string
-	volumeMountPath string
+	image              string
+	serviceType        string
+	serviceAnnotations map[string]string
+	volumeMountPath    string
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -665,9 +678,10 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 		},
 		services: []service{
 			{
-				name:          "router",
-				serviceType:   cfg.serviceType,
-				trafficPolicy: getTrafficPolicy(cfg.serviceType),
+				name:               "router",
+				serviceType:        cfg.serviceType,
+				serviceAnnotations: cfg.serviceAnnotations,
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
 				ports: []int{
 					router.MessagePort,
 					router.InteriorPort,

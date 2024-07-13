@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
 //go:embed assets/database/*
 var embeddedFiles embed.FS
 
-func CreateControllerDatabase(host, user, password, provider, dbName string, port int) error {
+func createControllerDatabase(host, user, password, provider, dbName string, port int) error {
 	// Create MySQL DSN (Data Source Name)
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, password, host, port)
 

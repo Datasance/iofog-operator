@@ -27,9 +27,10 @@ func newServices(namespace string, ms *microservice) (svcs []*corev1.Service) {
 	for _, msvcSvc := range ms.services {
 		svc := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      msvcSvc.name,
-				Namespace: namespace,
-				Labels:    ms.labels,
+				Name:        msvcSvc.name,
+				Namespace:   namespace,
+				Labels:      ms.labels,
+				Annotations: msvcSvc.serviceAnnotations,
 			},
 			Spec: corev1.ServiceSpec{
 				Type:                  corev1.ServiceType(msvcSvc.serviceType),
