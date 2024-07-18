@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/datasance/iofog-go-sdk/v3 v3.4.2
 	github.com/go-logr/logr v1.2.3
+	github.com/go-sql-driver/mysql v1.8.0
 	github.com/skupperproject/skupper-cli v0.0.1-beta6
 	k8s.io/api v0.26.0
 	k8s.io/apiextensions-apiserver v0.26.0
@@ -14,6 +15,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -70,18 +72,19 @@ require (
 )
 
 retract (
-    v3.2.1 // Published accidentally.
-    v3.2.2 // Published accidentally.
-    v3.2.3 // Published accidentally.
-	v3.2.4 // Published accidentally.
-	v3.2.5 // Published accidentally.
-	v3.2.6 // Version updated.
-	v3.3.0 // Published accidentally.
-	v3.3.1 // Published accidentally.
-	v3.3.2 // Published accidentally.
-	v3.3.3 // Published accidentally.
-	v3.3.4 // Published accidentally.
-	v3.3.5 // Published accidentally.
-	v3.3.6 // Published accidentally.
 	v3.3.7 // Published accidentally.
+	v3.3.6 // Published accidentally.
+	v3.3.5 // Published accidentally.
+	v3.3.4 // Published accidentally.
+	v3.3.3 // Published accidentally.
+	v3.3.2 // Published accidentally.
+	v3.3.1 // Published accidentally.
+	v3.3.0 // Published accidentally.
+	v3.2.6 // Version updated.
+	v3.2.5 // Published accidentally.
+	v3.2.4 // Published accidentally.
+	v3.2.3 // Published accidentally.
+	v3.2.2 // Published accidentally.
+	v3.2.1 // Published accidentally.
+	v3.3.10 // Fixed.
 )

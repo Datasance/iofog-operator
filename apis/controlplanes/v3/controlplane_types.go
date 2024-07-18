@@ -40,7 +40,7 @@ type ControlPlaneSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	// User contains credentials for ioFog Controller
-	User User `json:"user"`
+	// User User `json:"user"`
 	// Auth contains Keycloak Client Configuration of Controller and ECN Viewer
 	Auth Auth `json:"auth"`
 	// Database is only used when ioFog Controller is configured to connect to an external DB.
@@ -68,8 +68,9 @@ type Services struct {
 }
 
 type Service struct {
-	Type    string `json:"type,omitempty"`
-	Address string `json:"address,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	Address     string            `json:"address,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type Images struct {
@@ -82,13 +83,13 @@ type Images struct {
 }
 
 type Auth struct {
-	URL               string `json:"url"`
-	Realm             string `json:"realm"`
-	SSL               string `json:"ssl"`
-	RealmKey          string `json:"realmKey"`
-	ControllerClient  string `json:"controllerClient"`
-	ControllerSecret  string `json:"controllerSecret"`
-	ViewerClient      string `json:"viewerClient"`
+	URL              string `json:"url"`
+	Realm            string `json:"realm"`
+	SSL              string `json:"ssl"`
+	RealmKey         string `json:"realmKey"`
+	ControllerClient string `json:"controllerClient"`
+	ControllerSecret string `json:"controllerSecret"`
+	ViewerClient     string `json:"viewerClient"`
 }
 
 type Database struct {
@@ -101,10 +102,10 @@ type Database struct {
 }
 
 type User struct {
-	Name     string `json:"name"`
-	Surname  string `json:"surname"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name            string `json:"name"`
+	Surname         string `json:"surname"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
 	SubscriptionKey string `json:"subscriptionKey"`
 }
 

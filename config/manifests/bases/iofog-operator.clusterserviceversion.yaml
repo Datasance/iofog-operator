@@ -34,5 +34,5 @@ spec:
     url: https://iofog-operator.domain
   maturity: alpha
   provider:
-    name: Edgeworx
+    name: Datasance
   version: 0.0.0

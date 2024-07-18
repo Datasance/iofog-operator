@@ -35,6 +35,32 @@ spec:
           spec:
             description: ControlPlaneSpec defines the desired state of ControlPlane
             properties:
+              auth:
+                description: Keycloak Connection Parameters for ioFog Controller User Authentication
+                properties:
+                  url:
+                    type: string
+                  realm:
+                    type: string
+                  realmKey:
+                    type: string
+                  ssl:
+                    type: string
+                  controllerClient:
+                    type: string
+                  controllerSecret:
+                    type: string
+                  viewerClient:
+                    type: string
+                required:
+                - url
+                - realm
+                - realmKey
+                - ssl
+                - controllerClient
+                - controllerSecret
+                - viewerClient
+                type: object
               controller:
                 description: Controller contains runtime configuration for ioFog Controller
                 properties:
@@ -52,8 +78,7 @@ spec:
                     type: string
                 type: object
               database:
-                description: Database is only used when ioFog Controller is configured
-                  to connect to an extrenal DB
+                description: Database for ioFog Controller
                 properties:
                   databaseName:
                     type: string
@@ -134,6 +159,10 @@ spec:
                         type: string
                       type:
                         type: string
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
                     type: object
                   proxy:
                     properties:
@@ -141,6 +170,10 @@ spec:
                         type: string
                       type:
                         type: string
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
                     type: object
                   router:
                     properties:
@@ -148,34 +181,15 @@ spec:
                         type: string
                       type:
                         type: string
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
                     type: object
                 type: object
-              user:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "operator-sdk generate k8s" to regenerate code after
-                  modifying this file Add custom validation using kubebuilder tags:
-                  https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-                  User contains credentials for ioFog Controller'
-                properties:
-                  email:
-                    type: string
-                  name:
-                    type: string
-                  password:
-                    type: string
-                  surname:
-                    type: string
-                  subscriptionKey:
-                    type: string
-                required:
-                - email
-                - name
-                - password
-                - surname
-                - subscriptionKey
-                type: object
             required:
-            - user
+            - database
+            - auth
             type: object
           status:
             description: ControlPlaneStatus defines the observed state of ControlPlane
