@@ -134,6 +134,13 @@ func CreateControllerDatabase(host, user, password, provider, dbName string, por
 			// Execute the SQL statement
 			_, err := db.Exec(statement)
 			if err != nil {
+				// Check for specific errors to ignore
+				if strings.Contains(err.Error(), "Error 1050") ||
+					strings.Contains(err.Error(), "Error 1060") ||
+					strings.Contains(err.Error(), "Error 1061") {
+					log.Printf("Ignoring known error: %v", err)
+					continue
+				}
 				return fmt.Errorf("failed to execute migration SQL statement: %v", err)
 			}
 		}
