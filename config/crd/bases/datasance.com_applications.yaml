@@ -186,6 +186,16 @@ spec:
                           type: array
                         rootHostAccess:
                           type: boolean
+                        runtime:
+                          type: string
+                        platfomr:
+                          type: string
+                        runAsUser:
+                          type: string
+                        cdiDevices:
+                          items:
+                            type: string
+                          type: array
                         volumes:
                           items:
                             properties:

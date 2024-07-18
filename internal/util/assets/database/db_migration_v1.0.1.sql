@@ -603,5 +603,18 @@ CREATE TABLE IF NOT EXISTS ApplicationTemplateVariables (
 
 CREATE INDEX idx_applicationtemplatevariables_application_template_id ON ApplicationTemplateVariables (application_template_id);
 
+CREATE TABLE IF NOT EXISTS MicroserviceCdiDevices (
+    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    cdi_devices TEXT,
+    microservice_uuid VARCHAR(32),
+    FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_microservice_cdiDevices_microserviceUuid ON MicroserviceCdiDevices (microservice_uuid);
+
+ALTER TABLE Microservices
+ADD COLUMN run_as_user TEXT DEFAULT NULL,
+ADD COLUMN platform TEXT DEFAULT NULL,
+ADD COLUMN runtime TEXT DEFAULT NULL;
 
 COMMIT;
