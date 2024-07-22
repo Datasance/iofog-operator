@@ -59,7 +59,7 @@ func CreateControllerDatabase(host, user, password, provider, dbName string, por
 		}
 
 		// Read migration SQL file
-		migrationSQL, err := embeddedFiles.ReadFile("assets/database/db_migration_v1.0.0.sql")
+		migrationSQL, err := embeddedFiles.ReadFile("assets/database/db_migration_v1.0.1.sql")
 		if err != nil {
 			return fmt.Errorf("failed to read migration SQL file: %v", err)
 		}
@@ -116,7 +116,7 @@ func CreateControllerDatabase(host, user, password, provider, dbName string, por
 		}
 
 		// Read migration SQL file
-		migrationSQL, err := embeddedFiles.ReadFile("assets/database/db_migration_v1.0.0.sql")
+		migrationSQL, err := embeddedFiles.ReadFile("assets/database/db_migration_v1.0.1.sql")
 		if err != nil {
 			return fmt.Errorf("failed to read migration SQL file: %v", err)
 		}

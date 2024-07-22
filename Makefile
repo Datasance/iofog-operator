@@ -6,7 +6,7 @@ LDFLAGS += -X $(PREFIX).portManagerTag=v3.0.5
 LDFLAGS += -X $(PREFIX).kubeletTag=v3.0.1
 LDFLAGS += -X $(PREFIX).proxyTag=v3.0.2
 LDFLAGS += -X $(PREFIX).routerTag=v3.2.0
-LDFLAGS += -X $(PREFIX).controllerTag=v3.2.1
+LDFLAGS += -X $(PREFIX).controllerTag=v3.3.0
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
