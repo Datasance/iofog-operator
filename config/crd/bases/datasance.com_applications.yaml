@@ -5,14 +5,14 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: applications.datasance.com
+  name: apps.datasance.com
 spec:
   group: datasance.com
   names:
     kind: Application
     listKind: ApplicationList
-    plural: applications
-    singular: application
+    plural: apps
+    singular: app
   scope: Namespaced
   versions:
   - name: v1
@@ -97,7 +97,6 @@ spec:
                         name:
                           type: string
                       required:
-                      - config
                       - name
                       type: object
                     application:
@@ -175,7 +174,6 @@ spec:
                                     type: array
                                 required:
                                 - enabled
-                                - links
                                 - protocol
                                 - schemes
                                 type: object
@@ -188,7 +186,7 @@ spec:
                           type: boolean
                         runtime:
                           type: string
-                        platfomr:
+                        platform:
                           type: string
                         runAsUser:
                           type: string
@@ -208,14 +206,12 @@ spec:
                               type:
                                 type: string
                             required:
-                            - accessMode
                             - containerDestination
                             - hostDestination
                             type: object
                           type: array
                       required:
                       - ports
-                      - rootHostAccess
                       type: object
                     created:
                       type: string
@@ -235,7 +231,6 @@ spec:
                           type: string
                       required:
                       - arm
-                      - catalogId
                       - registry
                       - x86
                       type: object
@@ -249,12 +244,8 @@ spec:
                   - agent
                   - config
                   - name
-                  - uuid
                   type: object
                 type: array
-              replicas:
-                format: int32
-                type: integer
               routes:
                 items:
                   description: Route contains information about a route from one microservice
@@ -274,7 +265,6 @@ spec:
                 type: array
             required:
             - microservices
-            - replicas
             - routes
             type: object
           status:
@@ -286,17 +276,9 @@ spec:
                 items:
                   type: string
                 type: array
-              replicas:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                  code after modifying this file Add custom validation using kubebuilder
-                  tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
-                format: int32
-                type: integer
             required:
             - labelSelector
             - podNames
-            - replicas
             type: object
         type: object
     served: true

@@ -253,6 +253,7 @@ func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogcl
 func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Reconciliation {
 	ms := newPortManagerMicroservice(&portManagerConfig{
 		image:              r.cp.Spec.Images.PortManager,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		proxyImage:         r.cp.Spec.Images.Proxy,
 		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
 		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
@@ -295,6 +296,7 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
 	ms := newRouterMicroservice(routerMicroserviceConfig{
 		image:              r.cp.Spec.Images.Router,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		serviceType:        r.cp.Spec.Services.Router.Type,
 		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
 		volumeMountPath:    volumeMountPath,
@@ -332,7 +334,7 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 
 	var address string
 
-	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeLoadBalancer)) {
+	if strings.EqualFold(r.cp.Spec.Services.Router.Type, string(corev1.ServiceTypeLoadBalancer)) {
 		//nolint:contextcheck // k8sClient unfortunately does not accept context
 		address, err = k8sClient.WaitForLoadBalancer(r.cp.ObjectMeta.Namespace, ms.name, loadBalancerTimeout)
 		if err != nil {

@@ -50,6 +50,8 @@ rules:
   - datasance.com
   resources:
   - applications/status
+  - apps/finalizers
+  - applications/finalizers
   verbs:
   - get
   - patch
@@ -70,6 +72,7 @@ rules:
   - datasance.com
   resources:
   - controlplanes/status
+  - controlplanes/finalizers
   verbs:
   - get
   - patch

@@ -473,6 +473,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 
 type portManagerConfig struct {
 	image              string
+	imagePullSecret    string
 	proxyImage         string
 	serviceAnnotations map[string]string
 	httpProxyAddress   string
@@ -508,6 +509,7 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 		labels: map[string]string{
 			"name": "port-manager",
 		},
+		imagePullSecret: cfg.imagePullSecret,
 		replicas: 1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
@@ -645,6 +647,7 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 
 type routerMicroserviceConfig struct {
 	image              string
+	imagePullSecret    string
 	serviceType        string
 	serviceAnnotations map[string]string
 	volumeMountPath    string
@@ -689,6 +692,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 			},
 		},
+		imagePullSecret: cfg.imagePullSecret,
 		replicas: 1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
