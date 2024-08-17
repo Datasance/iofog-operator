@@ -96,6 +96,9 @@ type controllerMicroserviceConfig struct {
 	imagePullSecret    string
 	serviceType        string
 	serviceAnnotations map[string]string
+	https              *bool
+	scheme             string
+	secretName         string
 	loadBalancerAddr   string
 	auth               *cpv3.Auth
 	db                 *cpv3.Database
@@ -132,6 +135,13 @@ func filterControllerConfig(cfg *controllerMicroserviceConfig) {
 	if cfg.pidBaseDir == "" {
 		cfg.pidBaseDir = "/tmp"
 	}
+
+	if cfg.https == nil || *cfg.https == false {
+		cfg.scheme = "http"
+	} else {
+		cfg.scheme = "https"
+	}
+
 }
 
 func getControllerPort(msvc *microservice) (int, error) {
@@ -217,8 +227,9 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/api/v1/status",
-							Port: intstr.FromInt(51121), //nolint:gomnd
+							Path:   "/api/v1/status",
+							Port:   intstr.FromInt(51121), //nolint:gomnd
+							Scheme: corev1.URIScheme(strings.ToUpper(cfg.scheme)),
 						},
 					},
 					InitialDelaySeconds: 10,
@@ -468,6 +479,45 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		})
 	}
 
+	// Add TLS secret details if type is https and secretname is provided
+	if cfg.https != nil && *cfg.https == true {
+		msvc.volumes = append(msvc.volumes, corev1.Volume{
+			Name: "controller-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.secretName,
+				},
+			},
+		})
+
+		msvc.containers[0].volumeMounts = append(msvc.containers[0].volumeMounts, corev1.VolumeMount{
+			Name:      "controller-cert",
+			MountPath: "/etc/pot/controller-cert/",
+		})
+
+		msvc.containers[0].command = []string{
+			"/bin/sh",
+			"-c",
+		}
+
+		msvc.containers[0].args = []string{
+			// Check if ca.crt exists and conditionally configure the controller
+			`if [ -f /etc/pot/controller-cert/ca.crt ]; then 
+				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -i /etc/pot/controller-cert/ca.crt && \
+				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
+				iofog-controller config dev-mode --off; 
+			else 
+				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -i /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
+				iofog-controller config dev-mode --off; 
+			fi && \
+			node /usr/local/lib/node_modules/@datasance/iofogcontroller/src/server.js`,
+		}
+
+	}
+
 	return msvc
 }
 
@@ -475,6 +525,8 @@ type portManagerConfig struct {
 	image              string
 	imagePullSecret    string
 	proxyImage         string
+	https              *bool
+	scheme             string
 	serviceAnnotations map[string]string
 	httpProxyAddress   string
 	tcpProxyAddress    string
@@ -488,6 +540,12 @@ func filterPortManagerConfig(cfg *portManagerConfig) {
 
 	if cfg.proxyImage == "" {
 		cfg.proxyImage = util.GetProxyImage()
+	}
+
+	if cfg.https == nil || *cfg.https == false {
+		cfg.scheme = "http"
+	} else {
+		cfg.scheme = "https"
 	}
 }
 
@@ -510,7 +568,7 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 			"name": "port-manager",
 		},
 		imagePullSecret: cfg.imagePullSecret,
-		replicas: 1,
+		replicas:        1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
 				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
@@ -639,6 +697,10 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Name:  "PROXY_SERVICE_ANNOTATIONS",
 						Value: string(serviceAnnotationsJSON),
 					},
+					{
+						Name:  "CONTROLLER_SCHEME",
+						Value: cfg.scheme,
+					},
 				},
 			},
 		},
@@ -693,7 +755,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 			},
 		},
 		imagePullSecret: cfg.imagePullSecret,
-		replicas: 1,
+		replicas:        1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
 				Verbs:     []string{"get", "list", "watch"},
