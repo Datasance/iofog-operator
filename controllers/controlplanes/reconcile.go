@@ -16,6 +16,7 @@ import (
 	"github.com/datasance/iofog-operator/v3/internal/util"
 	"github.com/skupperproject/skupper-cli/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -78,6 +79,8 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		serviceType:        r.cp.Spec.Services.Controller.Type,
 		serviceAnnotations: r.cp.Spec.Services.Controller.Annotations,
 		loadBalancerAddr:   r.cp.Spec.Services.Controller.Address,
+		https:              r.cp.Spec.Controller.Https,
+		secretName:         r.cp.Spec.Controller.SecretName,
 		portAllocatorHost:  r.cp.Spec.Controller.PortAllocatorHost,
 		ecn:                r.cp.Spec.Controller.ECNName,
 		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
@@ -88,6 +91,22 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		proxyBrokerToken:   r.cp.Spec.Controller.ProxyBrokerToken,
 		portRouterImage:    r.cp.Spec.Images.PortRouter,
 	}
+
+	ingressConfig := &controllerIngressConfig{
+		annotations:      r.cp.Spec.Ingresses.Controller.Annotations,
+		ingressClassName: r.cp.Spec.Ingresses.Controller.IngressClassName,
+		host:             r.cp.Spec.Ingresses.Controller.Host,
+		secretName:       r.cp.Spec.Ingresses.Controller.SecretName,
+	}
+
+	// get scheme for controller endpoint
+	var scheme string
+	if config.https == nil || *config.https == false {
+		scheme = "http"
+	} else {
+		scheme = "https"
+	}
+
 	// Create controller database
 	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
 
@@ -97,7 +116,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		return op.ReconcileWithError(err)
 	}
 
-	// Create secrets
+	// Create Controller Microservice
 	ms := newControllerMicroservice(r.cp.Namespace, config)
 
 	// Service Account
@@ -122,6 +141,13 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	// Service
 	if err := r.createService(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
+	}
+
+	// Ingress
+	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeClusterIP)) {
+		if err := r.createIngress(ctx, ingressConfig); err != nil {
+			return op.ReconcileWithError(err)
+		}
 	}
 
 	// PVC
@@ -150,7 +176,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	}
 
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", ms.name, r.cp.ObjectMeta.Namespace)
-	iofogClient, fin := r.getIofogClient(host, ctrlPort)
+	iofogClient, fin := r.getIofogClient(scheme, host, ctrlPort)
 
 	if fin.IsFinal() {
 		return fin
@@ -208,10 +234,24 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 			return op.ReconcileWithError(err)
 		}
 		// Check LB connection works
-		if _, fin := r.getIofogClient(host, ctrlPort); fin.IsFinal() {
+		if _, fin := r.getIofogClient(scheme, host, ctrlPort); fin.IsFinal() {
 			r.log.Info(fmt.Sprintf("LB Connection works for ControlPlane %s", r.cp.Name))
 
 			return fin
+		}
+	}
+
+	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeClusterIP)) {
+		// Retrieve the Ingress resource
+		ingress := &networkingv1.Ingress{}
+		err := r.Client.Get(ctx, types.NamespacedName{Name: "pot-controller", Namespace: r.cp.Namespace}, ingress)
+		if err != nil {
+			return op.ReconcileWithError(fmt.Errorf("failed to get Ingress resource: %w", err))
+		}
+
+		// Check if LoadBalancer ingress exists
+		if len(ingress.Status.LoadBalancer.Ingress) == 0 {
+			return op.ReconcileWithError(fmt.Errorf("no LoadBalancer ingress found for Ingress resource"))
 		}
 	}
 
@@ -228,8 +268,8 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	return op.Continue()
 }
 
-func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogclient.Client, op.Reconciliation) {
-	baseURL := fmt.Sprintf("http://%s:%d/api/v1", host, port) //nolint:nosprintfhostport
+func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port int) (*iofogclient.Client, op.Reconciliation) {
+	baseURL := fmt.Sprintf("%v://%s:%d/api/v1", scheme, host, port) //nolint:nosprintfhostport
 
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {
@@ -255,6 +295,7 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 		image:              r.cp.Spec.Images.PortManager,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		proxyImage:         r.cp.Spec.Images.Proxy,
+		https:              r.cp.Spec.Controller.Https,
 		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
 		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
 		tcpProxyAddress:    r.cp.Spec.Ingresses.TCPProxy.Address,

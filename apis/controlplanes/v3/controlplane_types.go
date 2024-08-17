@@ -116,14 +116,22 @@ type RouterIngress struct {
 	EdgePort     int    `json:"edgePort,omitempty"`
 }
 
+type ControllerIngress struct {
+	Annotations      map[string]string `json:"annotations,omitempty"`
+	IngressClassName string            `json:"ingressClassName,omitempty"`
+	Host             string            `json:"host,omitempty"`
+	SecretName       string            `json:"secretName,omitempty"`
+}
+
 type Ingress struct {
 	Address string `json:"address,omitempty"`
 }
 
 type Ingresses struct {
-	Router    RouterIngress `json:"router,omitempty"`
-	HTTPProxy Ingress       `json:"httpProxy,omitempty"`
-	TCPProxy  Ingress       `json:"tcpProxy,omitempty"`
+	Controller ControllerIngress `json:"controller,omitempty"`
+	Router     RouterIngress     `json:"router,omitempty"`
+	HTTPProxy  Ingress           `json:"httpProxy,omitempty"`
+	TCPProxy   Ingress           `json:"tcpProxy,omitempty"`
 }
 
 type Controller struct {
@@ -132,6 +140,8 @@ type Controller struct {
 	EcnViewerURL      string `json:"ecnViewerUrl,omitempty"`
 	PortProvider      string `json:"portProvider,omitempty"`
 	ECNName           string `json:"ecn,omitempty"`
+	Https             *bool  `json:"https,omitempty"`
+	SecretName        string `json:"secretName,omitempty"`
 	PortAllocatorHost string `json:"portAllocatorHost,omitempty"`
 	ProxyBrokerURL    string `json:"proxyBrokerUrl,omitempty"`
 	ProxyBrokerToken  string `json:"proxyBrokerToken,omitempty"`

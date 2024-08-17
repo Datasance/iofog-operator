@@ -76,6 +76,10 @@ spec:
                     type: string
                   portProvider:
                     type: string
+                  https:
+                    type: boolean
+                  secretName:
+                    type: string
                 type: object
               database:
                 description: Database for ioFog Controller
@@ -138,6 +142,19 @@ spec:
                   tcpProxy:
                     properties:
                       address:
+                        type: string
+                    type: object
+                  controller:
+                    properties:
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      ingressClassName:
+                        type: string
+                      host:
+                        type: string
+                      secretName:
                         type: string
                     type: object
                 type: object

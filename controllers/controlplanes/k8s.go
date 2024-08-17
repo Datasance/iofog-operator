@@ -13,6 +13,7 @@ import (
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -242,6 +243,42 @@ func (r *ControlPlaneReconciler) createService(ctx context.Context, ms *microser
 
 		// Resource already exists - don't requeue
 		r.log.Info("Skip reconcile: Service already exists", "Service.Namespace", found.Namespace, "Service.Name", found.Name)
+	}
+
+	return nil
+}
+
+func (r *ControlPlaneReconciler) createIngress(ctx context.Context, cfg *controllerIngressConfig) error {
+	ingress := newControllerIngress(r.cp.ObjectMeta.Namespace, cfg)
+
+	// Set ControlPlane instance as the owner and controller
+	if err := controllerutil.SetControllerReference(&r.cp, ingress, r.Scheme); err != nil {
+		return err
+	}
+
+	// Check if this resource already exists
+	found := &networkingv1.Ingress{}
+
+	err := r.Client.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, found)
+	if err != nil && k8serrors.IsNotFound(err) {
+		r.log.Info("Creating a new Ingress", "Ingress.Namespace", ingress.Namespace, "Ingress.Name", ingress.Name)
+
+		err = r.Client.Create(ctx, ingress)
+		if err != nil {
+			return err
+		}
+
+		// Resource created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// Resource already exists - don't requeue
+	r.log.Info(" Ingress already exists, updating existing Ingress:", "Ingress.Namespace", found.Namespace, "Ingress.Name", found.Name)
+
+	if err := r.Client.Update(ctx, ingress); err != nil {
+		return err
 	}
 
 	return nil
