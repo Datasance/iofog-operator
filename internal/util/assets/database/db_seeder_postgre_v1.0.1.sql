@@ -1,12 +1,12 @@
 START TRANSACTION;
 
-INSERT INTO Registries (url, is_public, secure, certificate, requires_cert, user_name, password, user_email)
+INSERT INTO "Registries" (url, is_public, secure, certificate, requires_cert, user_name, password, user_email)
 VALUES 
     ('registry.hub.docker.com', true, true, '', false, '', '', ''),
     ('from_cache', true, true, '', false, '', '', '');
    
 
-INSERT INTO CatalogItems (name, description, category, publisher, disk_required, ram_required, picture, config_example, is_public, registry_id)
+INSERT INTO "CatalogItems" (name, description, category, publisher, disk_required, ram_required, picture, config_example, is_public, registry_id)
 VALUES 
     ('Networking Tool', 'The built-in networking tool for Eclipse ioFog.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1),
     ('RESTBlue', 'REST API for Bluetooth Low Energy layer.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1),
@@ -19,21 +19,26 @@ VALUES
     ('JSON Sub-Select', 'Performs sub-selection and transform operations on any JSON messages', 'UTILITIES', 'Eclipse ioFog', 0, 0, 'images/build/59.png', NULL, true, 1),
     ('Humidity Sensor Simulator', 'Humidity Sensor Simulator for Eclipse ioFog', 'SIMULATOR', 'Eclipse ioFog', 0, 0, 'images/build/simulator.png', NULL, true, 1),
     ('Seismic Sensor Simulator', 'Seismic Sensor Simulator for Eclipse ioFog', 'SIMULATOR', 'Eclipse ioFog', 0, 0, 'images/build/simulator.png', NULL, true, 1),
-    ('Temperature Sensor Simulator', 'Temperature Sensor Simulator for Eclipse ioFog', 'SIMULATOR', 'Eclipse ioFog', 0, 0, 'images/build/simulator.png', NULL, true, 1);
+    ('Temperature Sensor Simulator', 'Temperature Sensor Simulator for Eclipse ioFog', 'SIMULATOR', 'Eclipse ioFog', 0, 0, 'images/build/simulator.png', NULL, true, 1),
+    ('Common Logging', 'Container which gathers logs and provides REST API for adding and querying logs from containers', 'UTILITIES', 'Eclipse ioFog', 0, 0, 'none.png', '{"access_tokens": ["Some_Access_Token"], "cleanfrequency": "1h40m", "ttl": "24h"}', false, 1),
+    ('JSON Generator', 'Container generates ioMessages with contentdata as complex JSON object.', 'UTILITIES', 'Eclipse ioFog', 0, 0, 'none.png', '{}', true, 1),
+    ('Router', 'The built-in router for Datasance PoT.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1),
+    ('Proxy', 'The built-in proxy for Datasance PoT.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1);
+
 
    
-INSERT INTO FogTypes (id, name, image, description, network_catalog_item_id, hal_catalog_item_id, bluetooth_catalog_item_id)
+INSERT INTO "FogTypes" (id, name, image, description, network_catalog_item_id, hal_catalog_item_id, bluetooth_catalog_item_id)
 VALUES 
     (0, 'Unspecified', 'iointegrator0.png', 'Unspecified device. Fog Type will be selected on provision', 1, 3, 2),
     (1, 'Standard Linux (x86)', 'iointegrator1.png', 'A standard Linux server of at least moderate processing power and capacity. Compatible with common Linux types such as Ubuntu, Red Hat, and CentOS.', 1, 3, 2),
     (2, 'ARM Linux', 'iointegrator2.png', 'A version of ioFog meant to run on Linux systems with ARM processors. Microservices for this ioFog type will be tailored to ARM systems.', 1, 3, 2);
 
-UPDATE Fogs
+UPDATE "Fogs"
 SET fog_type_id = 0
 WHERE fog_type_id IS NULL;
    
 
-INSERT INTO CatalogItemImages (catalog_item_id, fog_type_id, container_image)
+INSERT INTO "CatalogItemImages" (catalog_item_id, fog_type_id, container_image)
 VALUES 
     (1, 1, 'iofog/core-networking'),
     (1, 2, 'iofog/core-networking-arm'),
@@ -58,78 +63,32 @@ VALUES
     (11, 1, 'iofog/seismic-sensor-simulator'),
     (11, 2, 'iofog/seismic-sensor-simulator-arm'),
     (12, 1, 'iofog/temperature-sensor-simulator'),
-    (12, 2, 'iofog/temperature-sensor-simulator-arm');
+    (12, 2, 'iofog/temperature-sensor-simulator-arm'),
+    (13, 1, 'iofog/common-logging'),
+    (13, 2, 'iofog/common-logging-arm'),
+    (14, 1, 'iofog/json-generatorg'),
+    (14, 2, 'iofog/json-generator-arm'),
+    (15, 1, 'ghcr.io/datasance/router:3.2.0'),
+    (15, 2, 'ghcr.io/datasance/router:3.2.0'),
+    (16, 1, 'ghcr.io/datasance/proxy:3.0.2'),
+    (16, 2, 'ghcr.io/datasance/proxy:3.0.2');
 
-INSERT INTO CatalogItems (name, description, category, publisher, disk_required, ram_required, picture, config_example, is_public, registry_id)
-VALUES (
-    'Common Logging',
-    'Container which gathers logs and provides REST API for adding and querying logs from containers',
-    'UTILITIES',
-    'Eclipse ioFog',
-    0,
-    0,
-    'none.png',
-    '{"access_tokens": ["Some_Access_Token"], "cleanfrequency": "1h40m", "ttl": "24h"}',
-    false,
-    1
-);
-
-INSERT INTO CatalogItemImages (catalog_item_id, fog_type_id, container_image)
-VALUES 
-    (LAST_INSERT_ID(), 1, 'iofog/common-logging'),
-    (LAST_INSERT_ID(), 2, 'iofog/common-logging-arm');
    
-
-INSERT INTO CatalogItems (name, description, category, publisher, disk_required, ram_required, picture, config_example, is_public, registry_id)
-VALUES (
-    'JSON Generator',
-    'Container generates ioMessages with contentdata as complex JSON object.',
-    'UTILITIES',
-    'Eclipse ioFog',
-    0,
-    0,
-    'none.png',
-    '{}',
-    true,
-    1
-);
-
-
-INSERT INTO CatalogItemImages (catalog_item_id, fog_type_id, container_image)
-VALUES 
-    (LAST_INSERT_ID(), 1, 'iofog/json-generator'),
-    (LAST_INSERT_ID(), 2, 'iofog/json-generator-arm');
-   
-UPDATE CatalogItems 
+UPDATE "CatalogItems" 
 SET config_example = '{"citycode":"5391997","apikey":"6141811a6136148a00133488eadff0fb","frequency":1000}' 
 WHERE name = 'Open Weather Map Data';
 
-UPDATE CatalogItems 
+UPDATE "CatalogItems" 
 SET config_example = '{"buffersize":3,"contentdataencoding":"utf8","contextdataencoding":"utf8","outputfields":{"publisher":"source","contentdata":"temperature","timestamp":"time"}}' 
 WHERE name = 'JSON REST API';
 
-UPDATE CatalogItems 
+UPDATE "CatalogItems" 
 SET config_example = '{}' 
 WHERE name = 'JSON Sub-Select';
 
-UPDATE CatalogItems 
+UPDATE "CatalogItems" 
 SET is_public = true 
 WHERE name = 'Common Logging';
 
-
-INSERT INTO CatalogItems (name, description, category, publisher, disk_required, ram_required, picture, config_example, is_public, registry_id)
-VALUES 
-    ('Router', 'The built-in router for Datasance PoT.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1),
-    ('Proxy', 'The built-in proxy for Datasamce PoT.', 'SYSTEM', 'Eclipse ioFog', 0, 0, 'none.png', NULL, false, 1); 
-
-SET @router_id = LAST_INSERT_ID();
-SET @proxy_id = LAST_INSERT_ID() + 1;
-
-INSERT INTO CatalogItemImages (catalog_item_id, fog_type_id, container_image)
-VALUES 
-    (@router_id, 1, 'ghcr.io/datasance/router:3.1.1'),
-    (@router_id, 2, 'ghcr.io/datasance/router:3.1.1'),
-    (@proxy_id, 1, 'ghcr.io/datasance/proxy:3.0.1'),
-    (@proxy_id, 2, 'ghcr.io/datasance/proxy:3.0.1');
     
 COMMIT;

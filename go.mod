@@ -6,6 +6,7 @@ require (
 	github.com/datasance/iofog-go-sdk/v3 v3.4.11
 	github.com/go-logr/logr v1.2.3
 	github.com/go-sql-driver/mysql v1.8.0
+	github.com/lib/pq v1.10.9
 	github.com/skupperproject/skupper-cli v0.0.1-beta6
 	k8s.io/api v0.26.0
 	k8s.io/apiextensions-apiserver v0.26.0
