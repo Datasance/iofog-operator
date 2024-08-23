@@ -1,6 +1,6 @@
 START TRANSACTION;
 
-CREATE TABLE Flows (
+CREATE TABLE IF NOT EXISTS Flows (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) UNIQUE,
     description VARCHAR(255) DEFAULT '',
@@ -616,5 +616,10 @@ ALTER TABLE Microservices
 ADD COLUMN run_as_user TEXT DEFAULT NULL,
 ADD COLUMN platform TEXT DEFAULT NULL,
 ADD COLUMN runtime TEXT DEFAULT NULL;
+
+ALTER TABLE Fogs
+RENAME COLUMN `system-available-disk` TO system_available_disk,
+RENAME COLUMN `system-available-memory` TO system_available_memory,
+RENAME COLUMN `system-total-cpu` TO system_total_cpu;
 
 COMMIT;

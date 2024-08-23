@@ -701,6 +701,10 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Name:  "CONTROLLER_SCHEME",
 						Value: cfg.scheme,
 					},
+					{
+						Name:  "PULL_SECRET_NAME",
+						Value: cfg.imagePullSecret,
+					},
 				},
 			},
 		},
