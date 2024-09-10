@@ -212,20 +212,20 @@ func (cp *ControlPlane) SetConditionUpdating(log *logr.Logger) {
 }
 
 func (cp *ControlPlane) GetCondition() string {
-    state := conditionDeploying
+	state := conditionDeploying
 
-    for _, condition := range cp.Status.Conditions {
-        if condition.Status == metav1.ConditionTrue {
-            if condition.ObservedGeneration == cp.ObjectMeta.Generation {
-                state = condition.Type
-            } else {
-                state = conditionUpdating
-            }
-            break
-        }
-    }
+	for _, condition := range cp.Status.Conditions {
+		if condition.Status == metav1.ConditionTrue {
+			if condition.ObservedGeneration == cp.ObjectMeta.Generation {
+				state = condition.Type
+			} else {
+				state = conditionUpdating
+			}
+			break
+		}
+	}
 
-    return state
+	return state
 }
 
 func (cp *ControlPlane) IsReady() bool {
