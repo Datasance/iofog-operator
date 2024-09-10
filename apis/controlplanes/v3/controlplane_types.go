@@ -29,6 +29,7 @@ import (
 const (
 	conditionReady     = "ready"
 	conditionDeploying = "deploying"
+	conditionUpdating  = "updating"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -179,6 +180,7 @@ func (cp *ControlPlane) setCondition(conditionType string, log *logr.Logger) {
 			condition.Status = metav1.ConditionFalse
 			condition.Reason = fmt.Sprintf("transition_to_%s", conditionType)
 			condition.LastTransitionTime = now
+			condition.ObservedGeneration = cp.ObjectMeta.Generation
 		}
 	}
 	// Add / overwrite
@@ -187,6 +189,7 @@ func (cp *ControlPlane) setCondition(conditionType string, log *logr.Logger) {
 		Status:             metav1.ConditionTrue,
 		Reason:             "initial_status",
 		LastTransitionTime: now,
+		ObservedGeneration: cp.ObjectMeta.Generation,
 	}
 
 	if log != nil {
@@ -204,13 +207,20 @@ func (cp *ControlPlane) SetConditionReady(log *logr.Logger) {
 	cp.setCondition(conditionReady, log)
 }
 
+func (cp *ControlPlane) SetConditionUpdating(log *logr.Logger) {
+	cp.setCondition(conditionUpdating, log)
+}
+
 func (cp *ControlPlane) GetCondition() string {
 	state := conditionDeploying
 
 	for _, condition := range cp.Status.Conditions {
 		if condition.Status == metav1.ConditionTrue {
-			state = condition.Type
-
+			if condition.ObservedGeneration == cp.ObjectMeta.Generation {
+				state = condition.Type
+			} else {
+				state = conditionUpdating
+			}
 			break
 		}
 	}
@@ -224,6 +234,10 @@ func (cp *ControlPlane) IsReady() bool {
 
 func (cp *ControlPlane) IsDeploying() bool {
 	return cp.GetCondition() == conditionDeploying
+}
+
+func (cp *ControlPlane) IsUpdating() bool {
+	return cp.GetCondition() == conditionUpdating
 }
 
 // +kubebuilder:object:root=true
