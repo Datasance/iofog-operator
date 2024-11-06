@@ -100,7 +100,7 @@ func newControllerIngress(namespace string, cfg *controllerIngressConfig) *netwo
 									},
 								},
 								{
-									Path:     "/api/v1",
+									Path:     "/api/v3",
 									PathType: &pathType,
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{

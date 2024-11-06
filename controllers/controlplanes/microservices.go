@@ -112,7 +112,6 @@ type controllerMicroserviceConfig struct {
 	ecnViewerURL       string
 	proxyBrokerURL     string
 	proxyBrokerToken   string
-	portRouterImage    string
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -227,7 +226,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Path:   "/api/v1/status",
+							Path:   "/api/v3/status",
 							Port:   intstr.FromInt(51121), //nolint:gomnd
 							Scheme: corev1.URIScheme(strings.ToUpper(cfg.scheme)),
 						},
@@ -400,14 +399,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					{
 						Name:  "SystemImages_Router_2",
 						Value: cfg.routerImage,
-					},
-					{
-						Name:  "SystemImages_PortRouter_1",
-						Value: cfg.portRouterImage,
-					},
-					{
-						Name:  "SystemImages_PortRouter_2",
-						Value: cfg.portRouterImage,
 					},
 					{
 						Name:  "PORT_ALLOC_ADDRESS",

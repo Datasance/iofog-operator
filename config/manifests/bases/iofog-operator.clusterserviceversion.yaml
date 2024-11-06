@@ -2,7 +2,97 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: '[]'
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "datasance.com/v3",
+          "kind": "ControlPlane",
+          "metadata": {
+            "name": "pot"
+          },
+          "spec": {
+            "replicas": {
+              "controller": 2
+            },
+            "database": {
+              "provider": null,
+              "user": null,
+              "host": null,
+              "port": null,
+              "password": null,
+              "databaseName": null
+            },
+            "auth": {
+              "url": null,
+              "realm": null,
+              "realmKey": null,
+              "ssl": null,
+              "controllerClient": null,
+              "controllerSecret": null,
+              "viewerClient": null
+            },
+            "images": {
+              "pullSecret": null,
+              "controller": null,
+              "portManager": null,
+              "proxy": null,
+              "router": null
+            },
+            "services": {
+              "controller": {
+                "type": null,
+                "annotations": null
+              },
+              "proxy": {
+                "type": null,
+                "annotations": null
+              },
+              "router": {
+                "type": null,
+                "annotations": null
+              }
+            },
+            "controller": {
+              "pidBaseDir": "",
+              "ecnViewerPort": 0,
+              "ecnViewerUrl": null,
+              "https": null,
+              "secretName": null
+            },
+            "ingresses": {
+              "controller": {
+                "annotations": null,
+                "ingressClassName": null,
+                "host": null,
+                "secretName": null
+              },
+              "router": {
+                "address": null,
+                "messagePort": 5672,
+                "interiorPort": 55672,
+                "edgePort": 45672
+              },
+              "httpProxy": {
+                "address": null
+              },
+              "tcpProxy": {
+                "address": null
+              }
+            }
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2022-04-10T22:44:09Z",
+                "message": "",
+                "reason": "initial_status",
+                "status": "True",
+                "type": "deploying"
+              }
+            ]
+          }
+        }
+      ]
     capabilities: Basic Install
   name: iofog-operator.v0.0.0
   namespace: placeholder
@@ -29,10 +119,13 @@ spec:
     type: AllNamespaces
   keywords:
   - iofog
+  - datasance
+  - pot
   links:
-  - name: Iofog Operator
-    url: https://iofog-operator.domain
-  maturity: alpha
+  - name: Datasance PoT // Iofog Operator
+    url: https://datasance.com
+  maturity: stable
+  minKubeVersion: 1.18.0
   provider:
     name: Datasance
   version: 0.0.0

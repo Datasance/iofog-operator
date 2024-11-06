@@ -14,7 +14,7 @@ import (
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	"github.com/datasance/iofog-operator/v3/internal/util"
-	"github.com/skupperproject/skupper-cli/pkg/certs"
+	"github.com/skupperproject/skupper/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -89,7 +89,6 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		portProvider:       r.cp.Spec.Controller.PortProvider,
 		proxyBrokerURL:     r.cp.Spec.Controller.ProxyBrokerURL,
 		proxyBrokerToken:   r.cp.Spec.Controller.ProxyBrokerToken,
-		portRouterImage:    r.cp.Spec.Images.PortRouter,
 	}
 
 	ingressConfig := &controllerIngressConfig{
@@ -269,7 +268,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 }
 
 func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port int) (*iofogclient.Client, op.Reconciliation) {
-	baseURL := fmt.Sprintf("%v://%s:%d/api/v1", scheme, host, port) //nolint:nosprintfhostport
+	baseURL := fmt.Sprintf("%v://%s:%d/api/v3", scheme, host, port) //nolint:nosprintfhostport
 
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {

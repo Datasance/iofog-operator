@@ -2,11 +2,11 @@ OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
-LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.1
+LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.2
 LDFLAGS += -X $(PREFIX).kubeletTag=v3.0.1
 LDFLAGS += -X $(PREFIX).proxyTag=v3.0.2
 LDFLAGS += -X $(PREFIX).routerTag=v3.2.0
-LDFLAGS += -X $(PREFIX).controllerTag=v3.4.0
+LDFLAGS += -X $(PREFIX).controllerTag=v3.4.1
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
@@ -18,13 +18,18 @@ endif
 # Image URL to use all building/pushing image targets
 IMG ?= operator:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:crdVersions=v1,allowDangerousType=true"
+CRD_OPTIONS ?= "crd:crdVersions=v1,allowDangerousTypes=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
+endif
+
+# Check if GOBIN is an absolute path
+ifneq ($(shell [ -d $(GOBIN) ] && echo yes),yes)
+$(error GOBIN must be set to an absolute path and exist)
 endif
 
 all: build
@@ -107,7 +112,7 @@ controller-gen: ## Install controller-gen
 ifeq (, $(shell which controller-gen))
 	@{ \
 	set -e ;\
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0 ;\
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0 ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
@@ -118,7 +123,7 @@ kustomize: ## Install kustomize
 ifeq (, $(shell which kustomize))
 	@{ \
 	set -e ;\
-	go install sigs.k8s.io/kustomize/kustomize/v4@v4.5.7 ;\
+	go install sigs.k8s.io/kustomize/kustomize/v5@v5.5.0 ;\
 	}
 KUSTOMIZE=$(GOBIN)/kustomize
 else
