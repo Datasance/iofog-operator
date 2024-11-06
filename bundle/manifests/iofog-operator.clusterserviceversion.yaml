@@ -99,7 +99,7 @@ metadata:
     createdAt: "2024-11-04T20:45:43Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-  name: iofog-operator.v3.4.5
+  name: iofog-operator.v3.4.6
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -427,7 +427,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: iofog-operator
-                image: ghcr.io/datasance/operator:3.4.5
+                image: ghcr.io/datasance/operator:3.4.6
                 imagePullPolicy: Always
                 name: iofog-operator
                 resources: {}
@@ -540,4 +540,4 @@ spec:
   minKubeVersion: 1.18.0
   provider:
     name: Datasance
-  version: 3.4.5
+  version: 3.4.6
