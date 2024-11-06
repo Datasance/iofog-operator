@@ -40,11 +40,9 @@ type ControlPlaneSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	// User contains credentials for ioFog Controller
-	// User User `json:"user"`
 	// Auth contains Keycloak Client Configuration of Controller and ECN Viewer
 	Auth Auth `json:"auth"`
-	// Database is only used when ioFog Controller is configured to connect to an external DB.
+	// Database for ioFog Controller
 	Database Database `json:"database"`
 	// Ingresses allow Router and Port Manager to configure endpoint addresses correctly
 	Ingresses Ingresses `json:"ingresses,omitempty"`
@@ -80,7 +78,6 @@ type Images struct {
 	Router      string `json:"router,omitempty"`
 	PortManager string `json:"portManager,omitempty"`
 	Proxy       string `json:"proxy,omitempty"`
-	PortRouter  string `json:"portRouter,omitempty"`
 }
 
 type Auth struct {

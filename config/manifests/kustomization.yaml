@@ -5,6 +5,12 @@ resources:
 - ../default
 - ../samples
 - ../scorecard
+- ../crd/bases    # Path to CRDs
+- ../cr           # Path to CR examples
+- ../rbac         # Parth to ClusterRole
+
+patches:
+  - path: config/cr/controlplane.yaml
 
 # [WEBHOOK] To enable webhooks, uncomment all the sections with [WEBHOOK] prefix.
 # Do NOT uncomment sections with prefix [CERTMANAGER], as OLM does not support cert-manager.

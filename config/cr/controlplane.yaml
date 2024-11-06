@@ -1,52 +1,68 @@
-apiVersion: datasance.com/v1
+apiVersion: datasance.com/v3
 kind: ControlPlane
 metadata:
-  name: iofog
+  name: pot
 spec:
-  user:
-    name: "Serge"
-    surname: "Radinovich"
-    email: "serge@edgeworx.io"
-    password: "FDJLhu98buisdkj"
-    subscriptionKey: "XXXX-XXXX-XXXX-XXXX"
+  replicas:
+    controller: 2
+  database:
+    provider:
+    user: 
+    host: 
+    port: 
+    password: 
+    databaseName: 
+  auth:
+    url: 
+    realm: 
+    realmKey: 
+    ssl: 
+    controllerClient: 
+    controllerSecret: 
+    viewerClient: 
+  images:
+    pullSecret: 
+    controller: 
+    portManager: 
+    proxy: 
+    router: 
   services:
     controller:
-      type: LoadBalancer
-      address: ""
-    router:
-      type: LoadBalancer
-      address: ""
+      type:  # LoadBalancer / ClusterIP / Node Port .. If it is Cluster IP ingress for Controller need to be defined
+      annotations: # if type is LoadBalancer user can define annotations in order to map which IP pool they would like to assign for the service
+        #service.beta.kubernetes.io/azure-load-balancer-internal: "true"
     proxy:
-      type: LoadBalancer
-      address: ""
-  replicas:
-    controller: 1
-  database:
-    provider: ""
-    host: ""
-    port: 0
-    user: ""
-    password: ""
-    databaseName: ""
-  images:
-    pullSecret: ""
-    controller: ""
-    router: ""
-    portManager: ""
-    proxy: ""
-  ingresses:
+      type:  
+      annotations: # if type is LoadBalancer user can define annotations in order to map which IP pool they would like to assign for the service
+        #service.beta.kubernetes.io/azure-load-balancer-internal: "true"
     router:
-      address: ""
-      messagePort: 0
-      interiorPort: 0
-      edgePort: 0
-    httpProxy:
-      address: ""
-    tcpProxy:
-      address: ""
+      type:  
+      annotations: # if type is LoadBalancer user can define annotations in order to map which IP pool they would like to assign for the service
+        #service.beta.kubernetes.io/azure-load-balancer-internal: "true"
   controller:
     pidBaseDir: ""
     ecnViewerPort: 0
+    ecnViewerUrl: 
+    https: # true or false  ..default is false
+    secretName: #name of secret it has to be same with the one that defined in the controller ingress struct
+  ingresses:
+    controller:
+      annotations:
+        # cert-manager.io/cluster-issuer: letsencrypt
+        # nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+        # nginx.ingress.kubernetes.io/backend-protocol: "https"
+      ingressClassName: 
+      host: 
+      secretName: 
+    router:
+      address: 
+      messagePort: 5672
+      interiorPort: 55672
+      edgePort: 45672
+    httpProxy:
+      address:
+    tcpProxy:
+      address: 
 status:
   conditions:
     - lastTransitionTime: "2022-04-10T22:44:09Z"
@@ -54,3 +70,4 @@ status:
       reason: "initial_status"
       status: "True"
       type: "deploying"
+
