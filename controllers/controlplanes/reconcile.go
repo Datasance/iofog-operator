@@ -8,13 +8,15 @@ import (
 	"strings"
 	"time"
 
-	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
-	k8sclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s"
-	op "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/k8s/operator"
-	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
-	"github.com/eclipse-iofog/iofog-operator/v3/controllers/controlplanes/router"
-	"github.com/skupperproject/skupper-cli/pkg/certs"
+	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
+	k8sclient "github.com/datasance/iofog-go-sdk/v3/pkg/k8s"
+	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
+	"github.com/datasance/iofog-operator/v3/internal/util"
+	"github.com/skupperproject/skupper/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -28,68 +30,6 @@ const (
 
 func reconcileRoutine(ctx context.Context, recon func(context.Context) op.Reconciliation, reconChan chan op.Reconciliation) {
 	reconChan <- recon(ctx)
-}
-
-func (r *ControlPlaneReconciler) updateIofogUserPassword(ctx context.Context, iofogClient *iofogclient.Client) error {
-	r.log.Info(fmt.Sprintf("Updating user password %s for ControlPlane %s", r.cp.Spec.User.Password, r.cp.Name))
-	// Retrieve old password from secrets
-	found := &corev1.Secret{}
-
-	err := r.Client.Get(ctx, types.NamespacedName{Name: controllerCredentialsSecretName, Namespace: r.cp.Namespace}, found)
-	if err != nil {
-		return err
-	}
-	// Try to log in with old password
-	passwordBytes, ok := found.Data[passwordSecretKey]
-	if !ok {
-		return fmt.Errorf("password secret key %s not found in secret %s", passwordSecretKey, controllerCredentialsSecretName)
-	}
-
-	oldPassword, err := DecodeBase64(string(passwordBytes))
-	if err != nil {
-		return fmt.Errorf("password %s in secret %s is not a valid base64 string", string(passwordBytes), controllerCredentialsSecretName)
-	}
-
-	emailBytes, ok := found.Data[emailSecretKey]
-	if !ok {
-		return fmt.Errorf("email secret key %s not found in secret %s", emailSecretKey, controllerCredentialsSecretName)
-	}
-
-	email := string(emailBytes)
-
-	if err := iofogClient.Login(iofogclient.LoginRequest{
-		Email:    email,
-		Password: oldPassword,
-	}); err != nil {
-		r.log.Info(fmt.Sprintf("Failed to log in with old credentials for ControlPlane %s: %s %s", r.cp.Name, email, oldPassword))
-
-		return err
-	}
-	// Update password
-	newPassword, err := DecodeBase64(r.cp.Spec.User.Password)
-	if err != nil {
-		return fmt.Errorf("new password %s for ControlPlane %s is not a valid base64 string", r.cp.Name, r.cp.Spec.User.Password)
-	}
-
-	if err := r.updateIofogUser(iofogClient, oldPassword, newPassword); err != nil {
-		return err
-	}
-
-	// Update secret
-	found.StringData = map[string]string{
-		passwordSecretKey: r.cp.Spec.User.Password,
-		emailSecretKey:    r.cp.Spec.User.Email,
-	}
-	if err := r.Client.Update(ctx, found); err != nil {
-		return err
-	}
-
-	// Restart required pods
-	if err := r.restartPodsForDeployment(ctx, portManagerDeploymentName, r.cp.Namespace); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Context, ms *microservice) (shouldRestartPod bool, err error) {
@@ -129,24 +69,53 @@ func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Contex
 func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) op.Reconciliation {
 	// Configure Controller
 	config := &controllerMicroserviceConfig{
-		replicas:          r.cp.Spec.Replicas.Controller,
-		image:             r.cp.Spec.Images.Controller,
-		imagePullSecret:   r.cp.Spec.Images.PullSecret,
-		proxyImage:        r.cp.Spec.Images.Proxy,
-		routerImage:       r.cp.Spec.Images.Router,
-		db:                &r.cp.Spec.Database,
-		serviceType:       r.cp.Spec.Services.Controller.Type,
-		loadBalancerAddr:  r.cp.Spec.Services.Controller.Address,
-		portAllocatorHost: r.cp.Spec.Controller.PortAllocatorHost,
-		ecn:               r.cp.Spec.Controller.ECNName,
-		pidBaseDir:        r.cp.Spec.Controller.PidBaseDir,
-		ecnViewerPort:     r.cp.Spec.Controller.EcnViewerPort,
-		ecnViewerURL:      r.cp.Spec.Controller.EcnViewerURL,
-		portProvider:      r.cp.Spec.Controller.PortProvider,
-		proxyBrokerURL:    r.cp.Spec.Controller.ProxyBrokerURL,
-		proxyBrokerToken:  r.cp.Spec.Controller.ProxyBrokerToken,
-		portRouterImage:   r.cp.Spec.Images.PortRouter,
+		replicas:           r.cp.Spec.Replicas.Controller,
+		image:              r.cp.Spec.Images.Controller,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		proxyImage:         r.cp.Spec.Images.Proxy,
+		routerImage:        r.cp.Spec.Images.Router,
+		db:                 &r.cp.Spec.Database,
+		auth:               &r.cp.Spec.Auth,
+		serviceType:        r.cp.Spec.Services.Controller.Type,
+		serviceAnnotations: r.cp.Spec.Services.Controller.Annotations,
+		loadBalancerAddr:   r.cp.Spec.Services.Controller.Address,
+		https:              r.cp.Spec.Controller.Https,
+		secretName:         r.cp.Spec.Controller.SecretName,
+		portAllocatorHost:  r.cp.Spec.Controller.PortAllocatorHost,
+		ecn:                r.cp.Spec.Controller.ECNName,
+		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
+		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
+		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
+		portProvider:       r.cp.Spec.Controller.PortProvider,
+		proxyBrokerURL:     r.cp.Spec.Controller.ProxyBrokerURL,
+		proxyBrokerToken:   r.cp.Spec.Controller.ProxyBrokerToken,
 	}
+
+	ingressConfig := &controllerIngressConfig{
+		annotations:      r.cp.Spec.Ingresses.Controller.Annotations,
+		ingressClassName: r.cp.Spec.Ingresses.Controller.IngressClassName,
+		host:             r.cp.Spec.Ingresses.Controller.Host,
+		secretName:       r.cp.Spec.Ingresses.Controller.SecretName,
+	}
+
+	// get scheme for controller endpoint
+	var scheme string
+	if config.https == nil || *config.https == false {
+		scheme = "http"
+	} else {
+		scheme = "https"
+	}
+
+	// Create controller database
+	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
+
+	// Create the database and wait for completion
+	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+		r.log.Error(err, "Failed to create controller database")
+		return op.ReconcileWithError(err)
+	}
+
+	// Create Controller Microservice
 	ms := newControllerMicroservice(r.cp.Namespace, config)
 
 	// Service Account
@@ -171,6 +140,13 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	// Service
 	if err := r.createService(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
+	}
+
+	// Ingress
+	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeClusterIP)) {
+		if err := r.createIngress(ctx, ingressConfig); err != nil {
+			return op.ReconcileWithError(err)
+		}
 	}
 
 	// PVC
@@ -199,23 +175,15 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	}
 
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", ms.name, r.cp.ObjectMeta.Namespace)
-	iofogClient, fin := r.getIofogClient(host, ctrlPort)
+	iofogClient, fin := r.getIofogClient(scheme, host, ctrlPort)
 
 	if fin.IsFinal() {
 		return fin
 	}
-
 	// Set up user
-	if err := r.createIofogUser(iofogClient); err != nil {
+	if err := r.loginIofogClient(iofogClient); err != nil {
 		if !strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
-			r.log.Info(fmt.Sprintf("Could not create user for ControlPlane %s: %s", r.cp.Name, err.Error()))
-
-			return op.ReconcileWithRequeue(time.Second * 3) //nolint:gomnd
-		}
-		// If the error is invalid credentials, update user password
-		if err := r.updateIofogUserPassword(ctx, iofogClient); err != nil {
-			r.log.Info(fmt.Sprintf("Could not update user for ControlPlane %s: %s", r.cp.Name, err.Error()))
-
+			r.log.Info(fmt.Sprintf("Could not login to ControlPlane %s: %s", r.cp.Name, err.Error()))
 			return op.ReconcileWithError(err)
 		}
 	}
@@ -265,10 +233,24 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 			return op.ReconcileWithError(err)
 		}
 		// Check LB connection works
-		if _, fin := r.getIofogClient(host, ctrlPort); fin.IsFinal() {
+		if _, fin := r.getIofogClient(scheme, host, ctrlPort); fin.IsFinal() {
 			r.log.Info(fmt.Sprintf("LB Connection works for ControlPlane %s", r.cp.Name))
 
 			return fin
+		}
+	}
+
+	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeClusterIP)) {
+		// Retrieve the Ingress resource
+		ingress := &networkingv1.Ingress{}
+		err := r.Client.Get(ctx, types.NamespacedName{Name: "pot-controller", Namespace: r.cp.Namespace}, ingress)
+		if err != nil {
+			return op.ReconcileWithError(fmt.Errorf("failed to get Ingress resource: %w", err))
+		}
+
+		// Check if LoadBalancer ingress exists
+		if len(ingress.Status.LoadBalancer.Ingress) == 0 {
+			return op.ReconcileWithError(fmt.Errorf("no LoadBalancer ingress found for Ingress resource"))
 		}
 	}
 
@@ -285,8 +267,8 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	return op.Continue()
 }
 
-func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogclient.Client, op.Reconciliation) {
-	baseURL := fmt.Sprintf("http://%s:%d/api/v3", host, port) //nolint:nosprintfhostport
+func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port int) (*iofogclient.Client, op.Reconciliation) {
+	baseURL := fmt.Sprintf("%v://%s:%d/api/v3", scheme, host, port) //nolint:nosprintfhostport
 
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {
@@ -309,13 +291,14 @@ func (r *ControlPlaneReconciler) getIofogClient(host string, port int) (*iofogcl
 
 func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Reconciliation {
 	ms := newPortManagerMicroservice(&portManagerConfig{
-		image:            r.cp.Spec.Images.PortManager,
-		proxyImage:       r.cp.Spec.Images.Proxy,
-		httpProxyAddress: r.cp.Spec.Ingresses.HTTPProxy.Address,
-		tcpProxyAddress:  r.cp.Spec.Ingresses.TCPProxy.Address,
-		watchNamespace:   r.cp.ObjectMeta.Namespace,
-		userEmail:        r.cp.Spec.User.Email,
-		userPass:         r.cp.Spec.User.Password,
+		image:              r.cp.Spec.Images.PortManager,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		proxyImage:         r.cp.Spec.Images.Proxy,
+		https:              r.cp.Spec.Controller.Https,
+		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
+		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
+		tcpProxyAddress:    r.cp.Spec.Ingresses.TCPProxy.Address,
+		watchNamespace:     r.cp.ObjectMeta.Namespace,
 	})
 
 	// Service Account
@@ -350,11 +333,13 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
 	// Configure
-	volumeMountPath := "/etc/qpid-dispatch-certs/"
+	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
 	ms := newRouterMicroservice(routerMicroserviceConfig{
-		image:           r.cp.Spec.Images.Router,
-		serviceType:     r.cp.Spec.Services.Router.Type,
-		volumeMountPath: volumeMountPath,
+		image:              r.cp.Spec.Images.Router,
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		serviceType:        r.cp.Spec.Services.Router.Type,
+		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
+		volumeMountPath:    volumeMountPath,
 	})
 
 	// Service Account
@@ -389,7 +374,7 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 
 	var address string
 
-	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeLoadBalancer)) {
+	if strings.EqualFold(r.cp.Spec.Services.Router.Type, string(corev1.ServiceTypeLoadBalancer)) {
 		//nolint:contextcheck // k8sClient unfortunately does not accept context
 		address, err = k8sClient.WaitForLoadBalancer(r.cp.ObjectMeta.Namespace, ms.name, loadBalancerTimeout)
 		if err != nil {

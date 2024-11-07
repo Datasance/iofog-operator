@@ -29,6 +29,7 @@ import (
 const (
 	conditionReady     = "ready"
 	conditionDeploying = "deploying"
+	conditionUpdating  = "updating"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -39,10 +40,10 @@ type ControlPlaneSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	// User contains credentials for ioFog Controller
-	User User `json:"user"`
-	// Database is only used when ioFog Controller is configured to connect to an external DB.
-	Database Database `json:"database,omitempty"`
+	// Auth contains Keycloak Client Configuration of Controller and ECN Viewer
+	Auth Auth `json:"auth"`
+	// Database for ioFog Controller
+	Database Database `json:"database"`
 	// Ingresses allow Router and Port Manager to configure endpoint addresses correctly
 	Ingresses Ingresses `json:"ingresses,omitempty"`
 	// Services should be LoadBalancer unless Ingress is being configured
@@ -66,8 +67,9 @@ type Services struct {
 }
 
 type Service struct {
-	Type    string `json:"type,omitempty"`
-	Address string `json:"address,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	Address     string            `json:"address,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type Images struct {
@@ -76,7 +78,16 @@ type Images struct {
 	Router      string `json:"router,omitempty"`
 	PortManager string `json:"portManager,omitempty"`
 	Proxy       string `json:"proxy,omitempty"`
-	PortRouter  string `json:"portRouter,omitempty"`
+}
+
+type Auth struct {
+	URL              string `json:"url"`
+	Realm            string `json:"realm"`
+	SSL              string `json:"ssl"`
+	RealmKey         string `json:"realmKey"`
+	ControllerClient string `json:"controllerClient"`
+	ControllerSecret string `json:"controllerSecret"`
+	ViewerClient     string `json:"viewerClient"`
 }
 
 type Database struct {
@@ -89,10 +100,11 @@ type Database struct {
 }
 
 type User struct {
-	Name     string `json:"name"`
-	Surname  string `json:"surname"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name            string `json:"name"`
+	Surname         string `json:"surname"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	SubscriptionKey string `json:"subscriptionKey"`
 }
 
 type RouterIngress struct {
@@ -102,14 +114,22 @@ type RouterIngress struct {
 	EdgePort     int    `json:"edgePort,omitempty"`
 }
 
+type ControllerIngress struct {
+	Annotations      map[string]string `json:"annotations,omitempty"`
+	IngressClassName string            `json:"ingressClassName,omitempty"`
+	Host             string            `json:"host,omitempty"`
+	SecretName       string            `json:"secretName,omitempty"`
+}
+
 type Ingress struct {
 	Address string `json:"address,omitempty"`
 }
 
 type Ingresses struct {
-	Router    RouterIngress `json:"router,omitempty"`
-	HTTPProxy Ingress       `json:"httpProxy,omitempty"`
-	TCPProxy  Ingress       `json:"tcpProxy,omitempty"`
+	Controller ControllerIngress `json:"controller,omitempty"`
+	Router     RouterIngress     `json:"router,omitempty"`
+	HTTPProxy  Ingress           `json:"httpProxy,omitempty"`
+	TCPProxy   Ingress           `json:"tcpProxy,omitempty"`
 }
 
 type Controller struct {
@@ -118,6 +138,8 @@ type Controller struct {
 	EcnViewerURL      string `json:"ecnViewerUrl,omitempty"`
 	PortProvider      string `json:"portProvider,omitempty"`
 	ECNName           string `json:"ecn,omitempty"`
+	Https             *bool  `json:"https,omitempty"`
+	SecretName        string `json:"secretName,omitempty"`
 	PortAllocatorHost string `json:"portAllocatorHost,omitempty"`
 	ProxyBrokerURL    string `json:"proxyBrokerUrl,omitempty"`
 	ProxyBrokerToken  string `json:"proxyBrokerToken,omitempty"`
@@ -155,6 +177,7 @@ func (cp *ControlPlane) setCondition(conditionType string, log *logr.Logger) {
 			condition.Status = metav1.ConditionFalse
 			condition.Reason = fmt.Sprintf("transition_to_%s", conditionType)
 			condition.LastTransitionTime = now
+			condition.ObservedGeneration = cp.ObjectMeta.Generation
 		}
 	}
 	// Add / overwrite
@@ -163,6 +186,7 @@ func (cp *ControlPlane) setCondition(conditionType string, log *logr.Logger) {
 		Status:             metav1.ConditionTrue,
 		Reason:             "initial_status",
 		LastTransitionTime: now,
+		ObservedGeneration: cp.ObjectMeta.Generation,
 	}
 
 	if log != nil {
@@ -180,13 +204,20 @@ func (cp *ControlPlane) SetConditionReady(log *logr.Logger) {
 	cp.setCondition(conditionReady, log)
 }
 
+func (cp *ControlPlane) SetConditionUpdating(log *logr.Logger) {
+	cp.setCondition(conditionUpdating, log)
+}
+
 func (cp *ControlPlane) GetCondition() string {
 	state := conditionDeploying
 
 	for _, condition := range cp.Status.Conditions {
 		if condition.Status == metav1.ConditionTrue {
-			state = condition.Type
-
+			if condition.ObservedGeneration == cp.ObjectMeta.Generation {
+				state = condition.Type
+			} else {
+				state = conditionUpdating
+			}
 			break
 		}
 	}
@@ -200,6 +231,10 @@ func (cp *ControlPlane) IsReady() bool {
 
 func (cp *ControlPlane) IsDeploying() bool {
 	return cp.GetCondition() == conditionDeploying
+}
+
+func (cp *ControlPlane) IsUpdating() bool {
+	return cp.GetCondition() == conditionUpdating
 }
 
 // +kubebuilder:object:root=true

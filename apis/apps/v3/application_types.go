@@ -17,7 +17,7 @@ limitations under the License.
 package v3
 
 import (
-	"github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/apps"
+	"github.com/datasance/iofog-go-sdk/v3/pkg/apps"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

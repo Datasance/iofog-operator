@@ -3,43 +3,47 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
-  name: applications.iofog.org
+    controller-gen.kubebuilder.io/version: v0.15.0
+  name: apps.datasance.com
 spec:
-  group: iofog.org
+  group: datasance.com
   names:
     kind: Application
     listKind: ApplicationList
-    plural: applications
-    singular: application
+    plural: apps
+    singular: app
   scope: Namespaced
   versions:
   - name: v3
     schema:
       openAPIV3Schema:
-        description: Application is the Schema for the applications API
+        description: Application is the Schema for the applications API.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
           spec:
-            description: ApplicationSpec defines the desired state of Application
+            description: ApplicationSpec defines the desired state of Application.
             properties:
               microservices:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "operator-sdk generate k8s" to regenerate code after
-                  modifying this file Add custom validation using kubebuilder tags:
-                  https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+                description: |-
+                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+                  Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
                 items:
                   description: Microservice contains information for configuring a
                     microservice
@@ -103,13 +107,17 @@ spec:
                     application:
                       type: string
                     config:
-                      type: object
-                      properties: {}
-                      additionalProperties: true
+                      items:
+                        type: object
+                      type: array
                     container:
                       description: MicroserviceContainer contains information for
                         configuring a microservice container
                       properties:
+                        cdiDevices:
+                          items:
+                            type: string
+                          type: array
                         commands:
                           items:
                             type: string
@@ -137,6 +145,8 @@ spec:
                                 type: string
                             type: object
                           type: array
+                        platform:
+                          type: string
                         ports:
                           items:
                             properties:
@@ -185,7 +195,11 @@ spec:
                             type: object
                           type: array
                         rootHostAccess:
-                          type: boolean
+                         type: boolean
+                        runAsUser:
+                          type: string
+                        runtime:
+                          type: string
                         volumes:
                           items:
                             properties:
@@ -268,7 +282,7 @@ spec:
             - routes
             type: object
           status:
-            description: ApplicationStatus defines the observed state of Application
+            description: ApplicationStatus defines the observed state of Application.
             properties:
               labelSelector:
                 type: string
@@ -277,10 +291,10 @@ spec:
                   type: string
                 type: array
               replicas:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                  code after modifying this file Add custom validation using kubebuilder
-                  tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+                description: |-
+                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+                  Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+                  Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
                 format: int32
                 type: integer
             required:
@@ -293,9 +307,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

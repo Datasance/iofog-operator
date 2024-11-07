@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"reflect"
 
-	appsv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/apps/v3"
+	appsv3 "github.com/datasance/iofog-operator/v3/apis/apps/v3"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,8 +42,8 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=iofog.org,resources=applications,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=iofog.org,resources=applications/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=datasance.com,resources=applications,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=datasance.com,resources=applications/status,verbs=get;update;patch
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("application", request.NamespacedName)

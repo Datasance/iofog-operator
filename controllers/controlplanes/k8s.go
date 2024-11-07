@@ -2,14 +2,18 @@ package controllers
 
 import (
 	"context"
+	"crypto/tls"
 	b64 "encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
-	iofogclient "github.com/eclipse-iofog/iofog-go-sdk/v3/pkg/client"
-	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
+	iofogclient "github.com/datasance/iofog-go-sdk/v3/pkg/client"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -45,19 +49,12 @@ func (r *ControlPlaneReconciler) restartPodsForDeployment(ctx context.Context, d
 
 	originValue := int32(1)
 	if found.Spec.Replicas == nil {
-		originValue = *found.Spec.Replicas
+		found.Spec.Replicas = &originValue
 	}
-
-	// Set replicas to 0
-	desiredReplicas := int32(0)
-	found.Spec.Replicas = &desiredReplicas
 
 	if err := r.Client.Update(ctx, found); err != nil {
 		return err
 	}
-
-	// Set replicas to previous value
-	found.Spec.Replicas = &originValue
 
 	return r.Client.Update(ctx, found)
 }
@@ -251,6 +248,42 @@ func (r *ControlPlaneReconciler) createService(ctx context.Context, ms *microser
 	return nil
 }
 
+func (r *ControlPlaneReconciler) createIngress(ctx context.Context, cfg *controllerIngressConfig) error {
+	ingress := newControllerIngress(r.cp.ObjectMeta.Namespace, cfg)
+
+	// Set ControlPlane instance as the owner and controller
+	if err := controllerutil.SetControllerReference(&r.cp, ingress, r.Scheme); err != nil {
+		return err
+	}
+
+	// Check if this resource already exists
+	found := &networkingv1.Ingress{}
+
+	err := r.Client.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, found)
+	if err != nil && k8serrors.IsNotFound(err) {
+		r.log.Info("Creating a new Ingress", "Ingress.Namespace", ingress.Namespace, "Ingress.Name", ingress.Name)
+
+		err = r.Client.Create(ctx, ingress)
+		if err != nil {
+			return err
+		}
+
+		// Resource created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// Resource already exists - don't requeue
+	r.log.Info(" Ingress already exists, updating existing Ingress:", "Ingress.Namespace", found.Namespace, "Ingress.Name", found.Name)
+
+	if err := r.Client.Update(ctx, ingress); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *ControlPlaneReconciler) createServiceAccount(ctx context.Context, ms *microservice) error {
 	svcAcc := newServiceAccount(r.cp.ObjectMeta.Namespace, ms)
 
@@ -368,56 +401,56 @@ func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *micr
 	return nil
 }
 
-func (r *ControlPlaneReconciler) createIofogUser(iofogClient *iofogclient.Client) error {
-	user := iofogclient.User{
-		Name:     r.cp.Spec.User.Name,
-		Surname:  r.cp.Spec.User.Surname,
-		Email:    r.cp.Spec.User.Email,
-		Password: r.cp.Spec.User.Password,
+func (r *ControlPlaneReconciler) loginIofogClient(iofogClient *iofogclient.Client) error {
+	authURL := r.cp.Spec.Auth.URL
+	realm := r.cp.Spec.Auth.Realm
+	clientID := r.cp.Spec.Auth.ControllerClient
+	clientSecret := r.cp.Spec.Auth.ControllerSecret
+
+	type LoginResponse struct {
+		AccessToken string `json:"access_token"`
 	}
 
-	password, err := DecodeBase64(user.Password)
-	if err == nil {
-		user.Password = password
+	r.log.Info("Generating Client Access Token")
+	// Construct the URL for token request
+	url := fmt.Sprintf("%srealms/%s/protocol/openid-connect/token", authURL, realm)
+	method := "POST"
+	payload := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientID, clientSecret)
+
+	// Create HTTP client with custom transport to skip certificate verification
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	// Create request
+	req, err := http.NewRequest(method, url, strings.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	// Send request
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	// Check response status
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", res.StatusCode)
 	}
 
-	if err := iofogClient.CreateUser(user); err != nil {
-		// If not error about account existing, fail
-		if !strings.Contains(err.Error(), "already an account associated") {
-			return err
-		}
-	}
-
-	// Try to log in
-	if err := iofogClient.Login(iofogclient.LoginRequest{
-		Email:    user.Email,
-		Password: user.Password,
-	}); err != nil {
+	// Read response body
+	var response LoginResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (r *ControlPlaneReconciler) updateIofogUser(iofogClient *iofogclient.Client, oldPassword, newPassword string) error {
-	// Update password
-	if newPassword != "" && newPassword != oldPassword {
-		if err := iofogClient.UpdateUserPassword(iofogclient.UpdateUserPasswordRequest{
-			OldPassword: oldPassword,
-			NewPassword: newPassword,
-		}); err != nil {
-			return err
-		}
-	}
-
-	// Try to log in
-	if err := iofogClient.Login(iofogclient.LoginRequest{
-		Email:    r.cp.Spec.User.Email,
-		Password: newPassword,
-	}); err != nil {
-		return err
-	}
-
+	// Assign access token
+	iofogClient.SetAccessToken(response.AccessToken)
 	return nil
 }
 

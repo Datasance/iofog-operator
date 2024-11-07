@@ -1,6 +1,6 @@
 /*
  *  *******************************************************************************
- *  * Copyright (c) 2019 Edgeworx, Inc.
+ *  * Copyright (c) 2023 Datasance Teknoloji A.S.
  *  *
  *  * This program and the accompanying materials are made available under the
  *  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -18,6 +18,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -27,9 +28,10 @@ func newServices(namespace string, ms *microservice) (svcs []*corev1.Service) {
 	for _, msvcSvc := range ms.services {
 		svc := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      msvcSvc.name,
-				Namespace: namespace,
-				Labels:    ms.labels,
+				Name:        msvcSvc.name,
+				Namespace:   namespace,
+				Labels:      ms.labels,
+				Annotations: msvcSvc.serviceAnnotations,
 			},
 			Spec: corev1.ServiceSpec{
 				Type:                  corev1.ServiceType(msvcSvc.serviceType),
@@ -53,6 +55,69 @@ func newServices(namespace string, ms *microservice) (svcs []*corev1.Service) {
 	}
 
 	return svcs
+}
+
+type controllerIngressConfig struct {
+	annotations      map[string]string
+	ingressClassName string
+	host             string
+	secretName       string
+}
+
+func newControllerIngress(namespace string, cfg *controllerIngressConfig) *networkingv1.Ingress {
+	pathType := networkingv1.PathTypePrefix
+
+	return &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "pot-controller",
+			Namespace:   namespace,
+			Annotations: cfg.annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &cfg.ingressClassName,
+			TLS: []networkingv1.IngressTLS{
+				{
+					Hosts:      []string{cfg.host},
+					SecretName: cfg.secretName,
+				},
+			},
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: cfg.host,
+					IngressRuleValue: networkingv1.IngressRuleValue{ // Correct field name
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: "controller",
+											Port: networkingv1.ServiceBackendPort{
+												Number: 80,
+											},
+										},
+									},
+								},
+								{
+									Path:     "/api/v3",
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: "controller",
+											Port: networkingv1.ServiceBackendPort{
+												Number: 51121,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func newDeployment(namespace string, ms *microservice) *appsv1.Deployment {

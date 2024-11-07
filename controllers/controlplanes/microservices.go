@@ -1,6 +1,6 @@
 /*
  *  *******************************************************************************
- *  * Copyright (c) 2019 Edgeworx, Inc.
+ *  * Copyright (c) 2023 Datasance Teknoloji A.S.
  *  *
  *  * This program and the accompanying materials are made available under the
  *  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -14,13 +14,14 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 
-	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
-	"github.com/eclipse-iofog/iofog-operator/v3/controllers/controlplanes/router"
-	"github.com/eclipse-iofog/iofog-operator/v3/internal/util"
+	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
+	"github.com/datasance/iofog-operator/v3/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,27 +29,36 @@ import (
 )
 
 const (
-	routerName                        = "router"
-	controllerName                    = "controller"
-	controllerCredentialsSecretName   = "controller-credentials"
-	emailSecretKey                    = "email"
-	passwordSecretKey                 = "password"
-	controllerDBCredentialsSecretName = "controller-db-credentials" //nolint:gosec
-	controllerDBUserSecretKey         = "username"
-	controllerDBDBNameSecretKey       = "dbname"
-	controllerDBPasswordSecretKey     = "password"
-	controllerDBHostSecretKey         = "host"
-	controllerDBPortSecretKey         = "port"
-	controllerS2STokensSecretName     = "controller-s2s-tokens" //nolint:gosec
-	proxyBrokerTokenSecretKey         = "proxy-broker-token"    //nolint:gosec
+	routerName                                     = "router"
+	controllerName                                 = "controller"
+	controllerCredentialsSecretName                = "controller-credentials"
+	emailSecretKey                                 = "email"
+	passwordSecretKey                              = "password"
+	controlllerAuthCredentialsSecretName           = "controller-auth-credentials" //nolint:gosec
+	controlllerAuthUrlSecretKey                    = "auth-url"
+	controlllerAuthRealmSecretKey                  = "auth-realm"
+	controlllerAuthRealmKeySecretKey               = "auth-realm-key"
+	controlllerAuthSSLSecretKey                    = "auth-ssl-req"
+	controlllerAuthControllerClientSecretKey       = "auth-controller-client"
+	controlllerAuthControllerClientSecretSecretKey = "auth-controller-client-secret"
+	controlllerAuthViewerClientSecretKey           = "auth-viewer-client"
+	controllerDBCredentialsSecretName              = "controller-db-credentials" //nolint:gosec
+	controllerDBUserSecretKey                      = "username"
+	controllerDBDBNameSecretKey                    = "dbname"
+	controllerDBPasswordSecretKey                  = "password"
+	controllerDBHostSecretKey                      = "host"
+	controllerDBPortSecretKey                      = "port"
+	controllerS2STokensSecretName                  = "controller-s2s-tokens" //nolint:gosec
+	proxyBrokerTokenSecretKey                      = "proxy-broker-token"    //nolint:gosec
 )
 
 type service struct {
-	name             string
-	loadBalancerAddr string
-	trafficPolicy    string
-	serviceType      string
-	ports            []int
+	name               string
+	loadBalancerAddr   string
+	trafficPolicy      string
+	serviceType        string
+	serviceAnnotations map[string]string
+	ports              []int
 }
 
 type microservice struct {
@@ -77,26 +87,31 @@ type container struct {
 	ports           []corev1.ContainerPort
 	resources       corev1.ResourceRequirements
 	volumeMounts    []corev1.VolumeMount
+	SecurityContext []corev1.SecurityContext
 }
 
 type controllerMicroserviceConfig struct {
-	replicas          int32
-	image             string
-	imagePullSecret   string
-	serviceType       string
-	loadBalancerAddr  string
-	db                *cpv3.Database
-	proxyImage        string
-	routerImage       string
-	portProvider      string
-	portAllocatorHost string
-	ecn               string
-	pidBaseDir        string
-	ecnViewerPort     int
-	ecnViewerURL      string
-	proxyBrokerURL    string
-	proxyBrokerToken  string
-	portRouterImage   string
+	replicas           int32
+	image              string
+	imagePullSecret    string
+	serviceType        string
+	serviceAnnotations map[string]string
+	https              *bool
+	scheme             string
+	secretName         string
+	loadBalancerAddr   string
+	auth               *cpv3.Auth
+	db                 *cpv3.Database
+	proxyImage         string
+	routerImage        string
+	portProvider       string
+	portAllocatorHost  string
+	ecn                string
+	pidBaseDir         string
+	ecnViewerPort      int
+	ecnViewerURL       string
+	proxyBrokerURL     string
+	proxyBrokerToken   string
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -119,6 +134,13 @@ func filterControllerConfig(cfg *controllerMicroserviceConfig) {
 	if cfg.pidBaseDir == "" {
 		cfg.pidBaseDir = "/tmp"
 	}
+
+	if cfg.https == nil || *cfg.https == false {
+		cfg.scheme = "http"
+	} else {
+		cfg.scheme = "https"
+	}
+
 }
 
 func getControllerPort(msvc *microservice) (int, error) {
@@ -142,10 +164,11 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		replicas:        cfg.replicas,
 		services: []service{
 			{
-				name:             "controller",
-				serviceType:      cfg.serviceType,
-				trafficPolicy:    getTrafficPolicy(cfg.serviceType),
-				loadBalancerAddr: cfg.loadBalancerAddr,
+				name:               "controller",
+				serviceType:        cfg.serviceType,
+				serviceAnnotations: cfg.serviceAnnotations,
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
+				loadBalancerAddr:   cfg.loadBalancerAddr,
 				ports: []int{
 					51121,
 					80,
@@ -171,6 +194,22 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				Type: corev1.SecretTypeOpaque,
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: namespace,
+					Name:      controlllerAuthCredentialsSecretName,
+				},
+				StringData: map[string]string{
+					controlllerAuthUrlSecretKey:                    cfg.auth.URL,
+					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,
+					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,
+					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,
+					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,
+					controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
+					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,
+				},
+			},
+			{
+				Type: corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: namespace,
 					Name:      controllerS2STokensSecretName,
 				},
 				StringData: map[string]string{
@@ -187,8 +226,9 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/api/v3/status",
-							Port: intstr.FromInt(51121), //nolint:gomnd
+							Path:   "/api/v3/status",
+							Port:   intstr.FromInt(51121), //nolint:gomnd
+							Scheme: corev1.URIScheme(strings.ToUpper(cfg.scheme)),
 						},
 					},
 					InitialDelaySeconds: 10,
@@ -197,7 +237,90 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					FailureThreshold:    2,
 				},
 				volumeMounts: []corev1.VolumeMount{},
+				SecurityContext: []corev1.SecurityContext{
+					{
+						RunAsUser:                &[]int64{0}[0],
+						AllowPrivilegeEscalation: &[]bool{false}[0],
+					},
+				},
 				env: []corev1.EnvVar{
+					{
+						Name: "KC_URL",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthUrlSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_REALM",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthRealmSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_REALM_KEY",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthRealmKeySecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_SSL_REQ",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthSSLSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT_SECRET",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_VIEWER_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthViewerClientSecretKey,
+							},
+						},
+					},
 					{
 						Name:  "DB_PROVIDER",
 						Value: cfg.db.Provider,
@@ -267,7 +390,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					},
 					{
 						Name:  "SystemImages_Proxy_2",
-						Value: util.TransformImageToARM(cfg.proxyImage),
+						Value: cfg.proxyImage,
 					},
 					{
 						Name:  "SystemImages_Router_1",
@@ -276,14 +399,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					{
 						Name:  "SystemImages_Router_2",
 						Value: cfg.routerImage,
-					},
-					{
-						Name:  "SystemImages_PortRouter_1",
-						Value: cfg.portRouterImage,
-					},
-					{
-						Name:  "SystemImages_PortRouter_2",
-						Value: cfg.portRouterImage,
 					},
 					{
 						Name:  "PORT_ALLOC_ADDRESS",
@@ -350,22 +465,63 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 
 		msvc.containers[0].volumeMounts = append(msvc.containers[0].volumeMounts, corev1.VolumeMount{
 			Name:      "controller-sqlite",
-			MountPath: "/usr/local/lib/node_modules/@iofog/iofogcontroller/src/data/sqlite_files/",
+			MountPath: "/usr/local/lib/node_modules/@datasance/iofogcontroller/src/data/sqlite_files/",
 			SubPath:   "prod_database.sqlite",
 		})
+	}
+
+	// Add TLS secret details if type is https and secretname is provided
+	if cfg.https != nil && *cfg.https == true {
+		msvc.volumes = append(msvc.volumes, corev1.Volume{
+			Name: "controller-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.secretName,
+				},
+			},
+		})
+
+		msvc.containers[0].volumeMounts = append(msvc.containers[0].volumeMounts, corev1.VolumeMount{
+			Name:      "controller-cert",
+			MountPath: "/etc/pot/controller-cert/",
+		})
+
+		msvc.containers[0].command = []string{
+			"/bin/sh",
+			"-c",
+		}
+
+		msvc.containers[0].args = []string{
+			// Check if ca.crt exists and conditionally configure the controller
+			`if [ -f /etc/pot/controller-cert/ca.crt ]; then 
+				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -i /etc/pot/controller-cert/ca.crt && \
+				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
+				iofog-controller config dev-mode --off; 
+			else 
+				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -i /etc/pot/controller-cert/tls.crt && \
+				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
+				iofog-controller config dev-mode --off; 
+			fi && \
+			node /usr/local/lib/node_modules/@datasance/iofogcontroller/src/server.js`,
+		}
+
 	}
 
 	return msvc
 }
 
 type portManagerConfig struct {
-	image            string
-	proxyImage       string
-	httpProxyAddress string
-	tcpProxyAddress  string
-	watchNamespace   string
-	userEmail        string
-	userPass         string
+	image              string
+	imagePullSecret    string
+	proxyImage         string
+	https              *bool
+	scheme             string
+	serviceAnnotations map[string]string
+	httpProxyAddress   string
+	tcpProxyAddress    string
+	watchNamespace     string
 }
 
 func filterPortManagerConfig(cfg *portManagerConfig) {
@@ -376,10 +532,25 @@ func filterPortManagerConfig(cfg *portManagerConfig) {
 	if cfg.proxyImage == "" {
 		cfg.proxyImage = util.GetProxyImage()
 	}
+
+	if cfg.https == nil || *cfg.https == false {
+		cfg.scheme = "http"
+	} else {
+		cfg.scheme = "https"
+	}
 }
 
 func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 	filterPortManagerConfig(cfg)
+
+	// Convert the serviceAnnotations map to a JSON string
+	var serviceAnnotationsJSON string
+	if len(cfg.serviceAnnotations) > 0 {
+		annotations, err := json.Marshal(cfg.serviceAnnotations)
+		if err == nil {
+			serviceAnnotationsJSON = string(annotations)
+		}
+	}
 
 	return &microservice{
 		mustRecreateOnRollout: true,
@@ -387,7 +558,8 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 		labels: map[string]string{
 			"name": "port-manager",
 		},
-		replicas: 1,
+		imagePullSecret: cfg.imagePullSecret,
+		replicas:        1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
 				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
@@ -401,10 +573,6 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: cfg.watchNamespace,
 					Name:      controllerCredentialsSecretName,
-				},
-				StringData: map[string]string{
-					emailSecretKey:    cfg.userEmail,
-					passwordSecretKey: cfg.userPass,
 				},
 			},
 		},
@@ -457,24 +625,46 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Value: "port-manager",
 					},
 					{
-						Name: "IOFOG_USER_EMAIL",
+						Name: "KC_URL",
 						ValueFrom: &corev1.EnvVarSource{
 							SecretKeyRef: &corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controllerCredentialsSecretName,
+									Name: controlllerAuthCredentialsSecretName,
 								},
-								Key: emailSecretKey,
+								Key: controlllerAuthUrlSecretKey,
 							},
 						},
 					},
 					{
-						Name: "IOFOG_USER_PASS",
+						Name: "KC_REALM",
 						ValueFrom: &corev1.EnvVarSource{
 							SecretKeyRef: &corev1.SecretKeySelector{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controllerCredentialsSecretName,
+									Name: controlllerAuthCredentialsSecretName,
 								},
-								Key: passwordSecretKey,
+								Key: controlllerAuthRealmSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretKey,
+							},
+						},
+					},
+					{
+						Name: "KC_CLIENT_SECRET",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controlllerAuthCredentialsSecretName,
+								},
+								Key: controlllerAuthControllerClientSecretSecretKey,
 							},
 						},
 					},
@@ -494,6 +684,18 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Name:  "ROUTER_ADDRESS",
 						Value: routerName,
 					},
+					{
+						Name:  "PROXY_SERVICE_ANNOTATIONS",
+						Value: string(serviceAnnotationsJSON),
+					},
+					{
+						Name:  "CONTROLLER_SCHEME",
+						Value: cfg.scheme,
+					},
+					{
+						Name:  "PULL_SECRET_NAME",
+						Value: cfg.imagePullSecret,
+					},
 				},
 			},
 		},
@@ -501,9 +703,11 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 }
 
 type routerMicroserviceConfig struct {
-	image           string
-	serviceType     string
-	volumeMountPath string
+	image              string
+	imagePullSecret    string
+	serviceType        string
+	serviceAnnotations map[string]string
+	volumeMountPath    string
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -534,9 +738,10 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 		},
 		services: []service{
 			{
-				name:          "router",
-				serviceType:   cfg.serviceType,
-				trafficPolicy: getTrafficPolicy(cfg.serviceType),
+				name:               "router",
+				serviceType:        cfg.serviceType,
+				serviceAnnotations: cfg.serviceAnnotations,
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
 				ports: []int{
 					router.MessagePort,
 					router.InteriorPort,
@@ -544,7 +749,8 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 			},
 		},
-		replicas: 1,
+		imagePullSecret: cfg.imagePullSecret,
+		replicas:        1,
 		rbacRules: []rbacv1.PolicyRule{
 			{
 				Verbs:     []string{"get", "list", "watch"},
@@ -576,7 +782,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				image:           cfg.image,
 				imagePullPolicy: "Always",
 				command: []string{
-					"/qpid-dispatch/launch.sh",
+					"/home/skrouterd/bin/launch.sh",
 				},
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
