@@ -14,7 +14,6 @@
 package controllers
 
 import (
-	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,14 +40,8 @@ func newServices(namespace string, ms *microservice) (svcs []*corev1.Service) {
 			},
 		}
 		// Add ports
-		for i, port := range msvcSvc.ports {
-			svcPort := corev1.ServicePort{
-				Name:       msvcSvc.name + strconv.Itoa(i),
-				Port:       int32(port),
-				TargetPort: intstr.FromInt(port),
-				Protocol:   corev1.Protocol("TCP"),
-			}
-			svc.Spec.Ports = append(svc.Spec.Ports, svcPort)
+		for _, port := range msvcSvc.ports {
+			svc.Spec.Ports = append(svc.Spec.Ports, port)
 		}
 
 		svcs = append(svcs, svc)

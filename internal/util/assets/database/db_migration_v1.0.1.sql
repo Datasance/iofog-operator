@@ -298,41 +298,6 @@ CREATE TABLE IF NOT EXISTS MicroservicePorts (
 
 CREATE INDEX idx_microservice_port_microserviceUuid ON MicroservicePorts (microservice_uuid);
 
-CREATE TABLE IF NOT EXISTS MicroserviceProxyPorts (
-    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    port_id INT,
-    host TEXT,
-    local_proxy_id TEXT,
-    public_port INT,
-    admin_port INT,
-    protocol TEXT,
-    proxy_token TEXT,
-    port_uuid TEXT,
-    server_token TEXT,
-    created_at DATETIME,
-    updated_at DATETIME,
-    FOREIGN KEY (port_id) REFERENCES MicroservicePorts (id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_microservice_proxy_port_portId ON MicroserviceProxyPorts (port_id);
-
-CREATE TABLE IF NOT EXISTS MicroservicePublicModes (
-    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    microservice_uuid VARCHAR(32),
-    network_microservice_uuid VARCHAR(32),
-    iofog_uuid VARCHAR(32),
-    microservice_port_id INT,
-    FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
-    FOREIGN KEY (network_microservice_uuid) REFERENCES Microservices (uuid) ON DELETE SET NULL,
-    FOREIGN KEY (iofog_uuid) REFERENCES Fogs (uuid) ON DELETE SET NULL,
-    FOREIGN KEY (microservice_port_id) REFERENCES MicroservicePorts (id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_microservice_public_mode_microserviceUuid ON MicroservicePublicModes (microservice_uuid);
-CREATE INDEX idx_microservice_public_mode_networkMicroserviceUuid ON MicroservicePublicModes (network_microservice_uuid);
-CREATE INDEX idx_microservice_public_mode_iofogUuid ON MicroservicePublicModes (iofog_uuid);
-CREATE INDEX idx_microservice_public_mode_microservicePortId ON MicroservicePublicModes (microservice_port_id);
-
 CREATE TABLE IF NOT EXISTS MicroservicePublicPorts (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     port_id INT UNIQUE,

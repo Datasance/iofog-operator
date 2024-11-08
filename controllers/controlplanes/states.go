@@ -64,7 +64,7 @@ func (r *ControlPlaneReconciler) reconcileDeploying(ctx context.Context) op.Reco
 	// Reconcile Router
 	go reconcileRoutine(ctx, r.reconcileRouter, reconChan)
 
-	// Reconcile Iofog Controller and Kubelet
+	// Reconcile Iofog Controller
 	go reconcileRoutine(ctx, r.reconcileIofogController, reconChan)
 
 	// Reconcile Port Manager
@@ -137,7 +137,7 @@ func (r *ControlPlaneReconciler) reconcileUpdating(ctx context.Context) op.Recon
 	// Reconcile Router
 	go reconcileRoutine(ctx, r.reconcileRouter, reconChan)
 
-	// Reconcile Iofog Controller and Kubelet
+	// Reconcile Iofog Controller
 	go reconcileRoutine(ctx, r.reconcileIofogController, reconChan)
 
 	// Reconcile Port Manager

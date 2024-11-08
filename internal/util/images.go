@@ -19,7 +19,6 @@ import "fmt"
 var (
 	repo           = "undefined" //nolint:gochecknoglobals
 	controllerTag  = "undefined" //nolint:gochecknoglobals
-	kubeletTag     = "undefined" //nolint:gochecknoglobals
 	routerTag      = "undefined" //nolint:gochecknoglobals
 	portManagerTag = "undefined" //nolint:gochecknoglobals
 	proxyTag       = "undefined" //nolint:gochecknoglobals
@@ -27,7 +26,6 @@ var (
 
 const (
 	controllerImage  = "controller"
-	kubeletImage     = "kubelet"
 	portManagerImage = "port-manager"
 	proxyImage       = "proxy"
 	routerImage      = "router"
@@ -36,7 +34,6 @@ const (
 func GetControllerImage() string {
 	return fmt.Sprintf("%s/%s:%s", repo, controllerImage, controllerTag)
 }
-func GetKubeletImage() string { return fmt.Sprintf("%s/%s:%s", repo, kubeletImage, kubeletTag) }
 func GetRouterImage() string  { return fmt.Sprintf("%s/%s:%s", repo, routerImage, routerTag) }
 func GetPortManagerImage() string {
 	return fmt.Sprintf("%s/%s:%s", repo, portManagerImage, portManagerTag)

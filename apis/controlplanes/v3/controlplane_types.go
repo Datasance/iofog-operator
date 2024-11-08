@@ -136,13 +136,9 @@ type Controller struct {
 	PidBaseDir        string `json:"pidBaseDir,omitempty"`
 	EcnViewerPort     int    `json:"ecnViewerPort,omitempty"`
 	EcnViewerURL      string `json:"ecnViewerUrl,omitempty"`
-	PortProvider      string `json:"portProvider,omitempty"`
 	ECNName           string `json:"ecn,omitempty"`
 	Https             *bool  `json:"https,omitempty"`
 	SecretName        string `json:"secretName,omitempty"`
-	PortAllocatorHost string `json:"portAllocatorHost,omitempty"`
-	ProxyBrokerURL    string `json:"proxyBrokerUrl,omitempty"`
-	ProxyBrokerToken  string `json:"proxyBrokerToken,omitempty"`
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane.

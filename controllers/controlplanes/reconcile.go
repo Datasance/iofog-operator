@@ -81,14 +81,10 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		loadBalancerAddr:   r.cp.Spec.Services.Controller.Address,
 		https:              r.cp.Spec.Controller.Https,
 		secretName:         r.cp.Spec.Controller.SecretName,
-		portAllocatorHost:  r.cp.Spec.Controller.PortAllocatorHost,
 		ecn:                r.cp.Spec.Controller.ECNName,
 		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
 		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
 		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
-		portProvider:       r.cp.Spec.Controller.PortProvider,
-		proxyBrokerURL:     r.cp.Spec.Controller.ProxyBrokerURL,
-		proxyBrokerToken:   r.cp.Spec.Controller.ProxyBrokerToken,
 	}
 
 	ingressConfig := &controllerIngressConfig{

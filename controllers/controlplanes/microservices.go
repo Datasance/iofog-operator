@@ -48,8 +48,6 @@ const (
 	controllerDBPasswordSecretKey                  = "password"
 	controllerDBHostSecretKey                      = "host"
 	controllerDBPortSecretKey                      = "port"
-	controllerS2STokensSecretName                  = "controller-s2s-tokens" //nolint:gosec
-	proxyBrokerTokenSecretKey                      = "proxy-broker-token"    //nolint:gosec
 )
 
 type service struct {
@@ -58,7 +56,7 @@ type service struct {
 	trafficPolicy      string
 	serviceType        string
 	serviceAnnotations map[string]string
-	ports              []int
+	ports              []corev1.ServicePort
 }
 
 type microservice struct {
@@ -87,7 +85,6 @@ type container struct {
 	ports           []corev1.ContainerPort
 	resources       corev1.ResourceRequirements
 	volumeMounts    []corev1.VolumeMount
-	SecurityContext []corev1.SecurityContext
 }
 
 type controllerMicroserviceConfig struct {
@@ -104,14 +101,10 @@ type controllerMicroserviceConfig struct {
 	db                 *cpv3.Database
 	proxyImage         string
 	routerImage        string
-	portProvider       string
-	portAllocatorHost  string
 	ecn                string
 	pidBaseDir         string
 	ecnViewerPort      int
 	ecnViewerURL       string
-	proxyBrokerURL     string
-	proxyBrokerToken   string
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -128,11 +121,11 @@ func filterControllerConfig(cfg *controllerMicroserviceConfig) {
 	}
 
 	if cfg.ecnViewerPort == 0 {
-		cfg.ecnViewerPort = 80
+		cfg.ecnViewerPort = 8008
 	}
 
 	if cfg.pidBaseDir == "" {
-		cfg.pidBaseDir = "/tmp"
+		cfg.pidBaseDir = "/home/runner"
 	}
 
 	if cfg.https == nil || *cfg.https == false {
@@ -148,7 +141,7 @@ func getControllerPort(msvc *microservice) (int, error) {
 		return 0, errors.New("controller microservice does not have requisite ports")
 	}
 
-	return msvc.services[0].ports[0], nil
+	return int(msvc.services[0].ports[0].Port), nil
 }
 
 func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConfig) *microservice {
@@ -169,9 +162,19 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				serviceAnnotations: cfg.serviceAnnotations,
 				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
 				loadBalancerAddr:   cfg.loadBalancerAddr,
-				ports: []int{
-					51121,
-					80,
+				ports: []corev1.ServicePort{
+					{
+						Name:       "controller-api",
+						Port:       51121,
+						TargetPort: intstr.FromInt(51121),
+						Protocol:   corev1.Protocol("TCP"),
+					},
+					{
+						Name:       "controller-viewer",
+						Port:       80,
+						TargetPort: intstr.FromInt(cfg.ecnViewerPort),
+						Protocol:   corev1.Protocol("TCP"),
+					},
 				},
 			},
 		},
@@ -206,16 +209,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,
 				},
 			},
-			{
-				Type: corev1.SecretTypeOpaque,
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      controllerS2STokensSecretName,
-				},
-				StringData: map[string]string{
-					proxyBrokerTokenSecretKey: cfg.proxyBrokerToken,
-				},
-			},
 		},
 		volumes: []corev1.Volume{},
 		containers: []container{
@@ -237,12 +230,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					FailureThreshold:    2,
 				},
 				volumeMounts: []corev1.VolumeMount{},
-				SecurityContext: []corev1.SecurityContext{
-					{
-						RunAsUser:                &[]int64{0}[0],
-						AllowPrivilegeEscalation: &[]bool{false}[0],
-					},
-				},
 				env: []corev1.EnvVar{
 					{
 						Name: "KC_URL",
@@ -381,10 +368,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						},
 					},
 					{
-						Name:  "MSVC_PORT_PROVIDER",
-						Value: cfg.portProvider,
-					},
-					{
 						Name:  "SystemImages_Proxy_1",
 						Value: cfg.proxyImage,
 					},
@@ -401,10 +384,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						Value: cfg.routerImage,
 					},
 					{
-						Name:  "PORT_ALLOC_ADDRESS",
-						Value: cfg.portAllocatorHost,
-					},
-					{
 						Name:  "ECN_NAME",
 						Value: cfg.ecn,
 					},
@@ -419,21 +398,6 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					{
 						Name:  "VIEWER_URL",
 						Value: cfg.ecnViewerURL,
-					},
-					{
-						Name:  "PROXY_BROKER_URL",
-						Value: cfg.proxyBrokerURL,
-					},
-					{
-						Name: "PROXY_BROKER_TOKEN",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controllerS2STokensSecretName,
-								},
-								Key: proxyBrokerTokenSecretKey,
-							},
-						},
 					},
 				},
 				// resources: corev1.ResourceRequirements{
@@ -742,10 +706,25 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				serviceType:        cfg.serviceType,
 				serviceAnnotations: cfg.serviceAnnotations,
 				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
-				ports: []int{
-					router.MessagePort,
-					router.InteriorPort,
-					router.EdgePort,
+				ports: []corev1.ServicePort{
+					{
+						Name:       "router-message",
+						Port:       router.MessagePort,
+						TargetPort: intstr.FromInt(router.MessagePort),
+						Protocol:   corev1.Protocol("TCP"),
+					},
+					{
+						Name:       "router-interior",
+						Port:       router.InteriorPort,
+						TargetPort: intstr.FromInt(router.InteriorPort),
+						Protocol:   corev1.Protocol("TCP"),
+					},
+					{
+						Name:       "router-edge",
+						Port:       router.EdgePort,
+						TargetPort: intstr.FromInt(router.EdgePort),
+						Protocol:   corev1.Protocol("TCP"),
+					},
 				},
 			},
 		},

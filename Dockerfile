@@ -25,7 +25,7 @@ RUN microdnf install shadow-utils && \
 RUN useradd --uid 10000 runner
 
 
-COPY LICENSE LICENSE
+COPY LICENSE /licenses/LICENSE
 COPY --from=builder /bin/iofog-operator /bin/
 LABEL org.opencontainers.image.description=operator
 LABEL org.opencontainers.image.source=https://github.com/datasance/iofog-operator
