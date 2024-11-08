@@ -205,21 +205,6 @@ func (r *ApplicationReconciler) deploymentForApp(app *appsv3.Application) (*apps
 						},
 					},
 					Affinity: &corev1.Affinity{
-						NodeAffinity: &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-								NodeSelectorTerms: []corev1.NodeSelectorTerm{
-									{
-										MatchExpressions: []corev1.NodeSelectorRequirement{
-											{
-												Key:      "type",
-												Operator: corev1.NodeSelectorOpIn,
-												Values:   []string{"iofog-kubelet"},
-											},
-										},
-									},
-								},
-							},
-						},
 						PodAntiAffinity: &corev1.PodAntiAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
 								{
