@@ -468,7 +468,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
 				iofog-controller config dev-mode --off; 
 			fi && \
-			node /usr/local/lib/node_modules/@datasance/iofogcontroller/src/server.js`,
+			node /home/runner/.npm-global/lib/node_modules/@datasance/iofogcontroller/src/server.js`,
 		}
 
 	}

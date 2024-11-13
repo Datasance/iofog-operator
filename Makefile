@@ -2,10 +2,10 @@ OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
-LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.3
-LDFLAGS += -X $(PREFIX).proxyTag=v3.0.3
+LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.4
+LDFLAGS += -X $(PREFIX).proxyTag=v3.0.5
 LDFLAGS += -X $(PREFIX).routerTag=v3.2.1
-LDFLAGS += -X $(PREFIX).controllerTag=v3.4.2
+LDFLAGS += -X $(PREFIX).controllerTag=v3.4.3
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
@@ -15,7 +15,10 @@ GOARGS=-gcflags="all=-N -l"
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= operator:latest
+REGISTRY ?= ghcr.io/datasance
+VERSION_TAG ?= 3.4.8
+IMG ?= operator:$(VERSION_TAG)
+BUNDLE_IMG ?= operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions=v1,allowDangerousTypes=true"
 
@@ -61,7 +64,7 @@ gen: controller-gen ## Generate code using controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 docker:
-	docker build -t $(IMG) .
+	docker build -t $(REGISTRY)/$(IMG) .
 
 unit: ## Run unit tests
 	set -o pipefail; go list ./... | xargs -n1 go test  $(GOARGS) -v -parallel 1 2>&1 | tee test.txt
@@ -135,6 +138,11 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+
+
+.PHONY: bundle-build
+bundle-build: ## Build the bundle image.
+	docker buildx build --platform=linux/amd64 -f bundle.Dockerfile -t $(REGISTRY)/$(BUNDLE_IMG) .
 
 help:
 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
