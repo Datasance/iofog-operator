@@ -87,7 +87,7 @@ func newControllerIngress(namespace string, cfg *controllerIngressConfig) *netwo
 										Service: &networkingv1.IngressServiceBackend{
 											Name: "controller",
 											Port: networkingv1.ServiceBackendPort{
-												Name: "controller-viewer",
+												Name: "ecn-viewer",
 											},
 										},
 									},

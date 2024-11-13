@@ -170,7 +170,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						Protocol:   corev1.Protocol("TCP"),
 					},
 					{
-						Name:       "controller-viewer",
+						Name:       "ecn-viewer",
 						Port:       80,
 						TargetPort: intstr.FromInt(cfg.ecnViewerPort),
 						Protocol:   corev1.Protocol("TCP"),
