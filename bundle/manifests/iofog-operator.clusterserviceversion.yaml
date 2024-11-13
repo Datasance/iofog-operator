@@ -121,7 +121,7 @@ metadata:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.arm64: supported
     operatorframework.io/os.linux: supported
-  name: datasance-pot-operator.v3.4.8
+  name: datasance-pot-operator.v3.4.9
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -576,4 +576,4 @@ spec:
       image: ghcr.io/datasance/proxy@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f 
     - name: port-manager
       image: ghcr.io/datasance/port-manager@sha256:4bf3793e9e3cd10df9b46c459e983631393825ca788ffbbb3ec3659158ad61fe 
-  version: 3.4.8
+  version: 3.4.9
