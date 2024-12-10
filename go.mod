@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.23.2
 
 require (
-	github.com/datasance/iofog-go-sdk/v3 v3.4.12
+	github.com/datasance/iofog-go-sdk/v3 v3.4.14
 	github.com/go-logr/logr v1.2.3
 	github.com/go-sql-driver/mysql v1.8.0
 	github.com/lib/pq v1.10.9
@@ -75,6 +75,7 @@ require (
 )
 
 retract (
+	v3.4.5 // Published accidentally.
 	v3.3.10 // Fixed.
 	v3.3.7 // Published accidentally.
 	v3.3.6 // Published accidentally.
@@ -90,5 +91,4 @@ retract (
 	v3.2.3 // Published accidentally.
 	v3.2.2 // Published accidentally.
 	v3.2.1 // Published accidentally.
-	v3.4.5 // Published accidentally.
 )

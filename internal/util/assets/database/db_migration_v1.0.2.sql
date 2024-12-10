@@ -218,10 +218,9 @@ CREATE INDEX idx_tunnels_iofogUuid ON Tunnels (iofog_uuid);
 
 CREATE TABLE IF NOT EXISTS Microservices (
     uuid VARCHAR(32) PRIMARY KEY NOT NULL,
-    config VARCHAR(1000) DEFAULT '{}',
+    config TEXT,
     name VARCHAR(255) DEFAULT 'New Microservice',
     config_last_updated BIGINT,
-    is_network BOOLEAN DEFAULT false,
     rebuild BOOLEAN DEFAULT false,
     root_host_access BOOLEAN DEFAULT false,
     log_size BIGINT DEFAULT 0,
@@ -399,29 +398,16 @@ CREATE INDEX idx_catalog_item_output_type_catalog_item_id ON CatalogItemOutputTy
 CREATE TABLE IF NOT EXISTS Routings (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL,
-    is_network_connection BOOLEAN DEFAULT false,
     source_microservice_uuid VARCHAR(32),
     dest_microservice_uuid VARCHAR(32),
-    source_network_microservice_uuid VARCHAR(32),
-    dest_network_microservice_uuid VARCHAR(32),
-    source_iofog_uuid VARCHAR(32),
-    dest_iofog_uuid VARCHAR(32),
     application_id INT,
     FOREIGN KEY (source_microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
     FOREIGN KEY (dest_microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
-    FOREIGN KEY (source_network_microservice_uuid) REFERENCES Microservices (uuid) ON DELETE SET NULL,
-    FOREIGN KEY (dest_network_microservice_uuid) REFERENCES Microservices (uuid) ON DELETE SET NULL,
-    FOREIGN KEY (source_iofog_uuid) REFERENCES Fogs (uuid) ON DELETE SET NULL,
-    FOREIGN KEY (dest_iofog_uuid) REFERENCES Fogs (uuid) ON DELETE SET NULL,
     FOREIGN KEY (application_id) REFERENCES Flows (id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_routing_sourceMicroserviceUuid ON Routings (source_microservice_uuid);
 CREATE INDEX idx_routing_destMicroserviceUuid ON Routings (dest_microservice_uuid);
-CREATE INDEX idx_routing_sourceNetworkMicroserviceUuid ON Routings (source_network_microservice_uuid);
-CREATE INDEX idx_routing_destNetworkMicroserviceUuid ON Routings (dest_network_microservice_uuid);
-CREATE INDEX idx_routing_sourceIofogUuid ON Routings (source_iofog_uuid);
-CREATE INDEX idx_routing_destIofogUuid ON Routings (dest_iofog_uuid);
 CREATE INDEX idx_routing_applicationId ON Routings (application_id);
 
 CREATE TABLE IF NOT EXISTS Routers (

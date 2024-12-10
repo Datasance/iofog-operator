@@ -68,10 +68,10 @@ VALUES
     (13, 2, 'iofog/common-logging-arm'),
     (14, 1, 'iofog/json-generatorg'),
     (14, 2, 'iofog/json-generator-arm'),
-    (15, 1, 'ghcr.io/datasance/router:3.2.0'),
-    (15, 2, 'ghcr.io/datasance/router:3.2.0'),
-    (16, 1, 'ghcr.io/datasance/proxy:3.0.2'),
-    (16, 2, 'ghcr.io/datasance/proxy:3.0.2');
+    (15, 1, 'ghcr.io/datasance/router:latest'),
+    (15, 2, 'ghcr.io/datasance/router:latest'),
+    (16, 1, 'ghcr.io/datasance/proxy:latest'),
+    (16, 2, 'ghcr.io/datasance/proxy:latest');
 
    
 UPDATE "CatalogItems" 

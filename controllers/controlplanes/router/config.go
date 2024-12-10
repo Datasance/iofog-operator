@@ -25,6 +25,7 @@ const rawRouterConfig = `
 router {
     mode: interior
     id: default-router
+    saslConfigDir: /etc/sasl2/
 }
 
 listener {
