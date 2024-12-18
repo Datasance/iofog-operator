@@ -34,7 +34,7 @@ const (
 func GetControllerImage() string {
 	return fmt.Sprintf("%s/%s:%s", repo, controllerImage, controllerTag)
 }
-func GetRouterImage() string  { return fmt.Sprintf("%s/%s:%s", repo, routerImage, routerTag) }
+func GetRouterImage() string { return fmt.Sprintf("%s/%s:%s", repo, routerImage, routerTag) }
 func GetPortManagerImage() string {
 	return fmt.Sprintf("%s/%s:%s", repo, portManagerImage, portManagerTag)
 }

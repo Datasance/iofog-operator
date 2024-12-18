@@ -26,6 +26,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 )
 
 const (
@@ -69,6 +70,7 @@ type microservice struct {
 	annotations           map[string]string
 	secrets               []corev1.Secret
 	volumes               []corev1.Volume
+	securityContext       *corev1.PodSecurityContext
 	rbacRules             []rbacv1.PolicyRule
 	mustRecreateOnRollout bool
 	availableDelay        int32
@@ -211,6 +213,11 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 			},
 		},
 		volumes: []corev1.Volume{},
+		securityContext: &corev1.PodSecurityContext{
+			RunAsUser:  pointer.Int64(10000), // UID
+			RunAsGroup: pointer.Int64(10000), // GID
+			FSGroup:    pointer.Int64(10000), // FSGroup
+		},
 		containers: []container{
 			{
 				name:            "controller",
@@ -429,8 +436,8 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 
 		msvc.containers[0].volumeMounts = append(msvc.containers[0].volumeMounts, corev1.VolumeMount{
 			Name:      "controller-sqlite",
-			MountPath: "home/runner/.npm-global/lib/node_modules/@datasance/iofogcontroller/src/data/sqlite_files/",
-			SubPath:   "prod_database.sqlite",
+			MountPath: "/home/runner/.npm-global/lib/node_modules/@datasance/iofogcontroller/src/data/sqlite_files/",
+			// SubPath:   "prod_database.sqlite",
 		})
 	}
 
@@ -483,6 +490,8 @@ type portManagerConfig struct {
 	https              *bool
 	scheme             string
 	serviceAnnotations map[string]string
+	routerServerName   string
+	routerTransport    string
 	httpProxyAddress   string
 	tcpProxyAddress    string
 	watchNamespace     string
@@ -653,6 +662,14 @@ func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
 						Value: string(serviceAnnotationsJSON),
 					},
 					{
+						Name:  "ROUTER_SERVERNAME",
+						Value: cfg.routerServerName,
+					},
+					{
+						Name:  "ROUTER_TRANSPORT",
+						Value: cfg.routerTransport,
+					},
+					{
 						Name:  "CONTROLLER_SCHEME",
 						Value: cfg.scheme,
 					},
@@ -672,6 +689,12 @@ type routerMicroserviceConfig struct {
 	serviceType        string
 	serviceAnnotations map[string]string
 	volumeMountPath    string
+	internalSecret     string
+	amqpsSecret        string
+	requireSsl         string
+	saslMechanisms     string
+	authenticatePeer   string
+	secretWithCa       *bool
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -681,6 +704,14 @@ func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
 
 	if cfg.serviceType == "" {
 		cfg.serviceType = string(corev1.ServiceTypeLoadBalancer)
+	}
+
+	if cfg.internalSecret == "" {
+		cfg.internalSecret = routerName + "-internal"
+	}
+
+	if cfg.amqpsSecret == "" {
+		cfg.amqpsSecret = routerName + "-amqps"
 	}
 
 	return cfg
@@ -742,7 +773,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				Name: routerName + "-internal",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: "router-internal",
+						SecretName: cfg.internalSecret,
 					},
 				},
 			},
@@ -750,7 +781,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				Name: routerName + "-amqps",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: routerName + "-amqps",
+						SecretName: cfg.amqpsSecret,
 					},
 				},
 			},
@@ -786,7 +817,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 					},
 					{
 						Name:  "QDROUTERD_CONF",
-						Value: router.GetConfig(),
+						Value: router.GetConfig(cfg.requireSsl, cfg.saslMechanisms, cfg.authenticatePeer, cfg.secretWithCa),
 					},
 					{
 						Name: "POD_NAMESPACE",
@@ -808,7 +839,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				volumeMounts: []corev1.VolumeMount{
 					{
 						Name:      routerName + "-internal",
-						MountPath: cfg.volumeMountPath + "/router-internal",
+						MountPath: cfg.volumeMountPath + "/" + routerName + "-internal",
 					},
 					{
 						Name:      routerName + "-amqps",

@@ -85,6 +85,28 @@ spec:
                   secretName:
                     type: string
                 type: object
+              router:
+                description: Router contains runtime configuration for ioFog Router
+                properties:
+                  internalSecret:
+                    type: string
+                  amqpsSecret:
+                    type: string
+                  requireSsl:
+                    type: string
+                  saslMechanisms:
+                    type: string
+                  authenticatePeer:
+                    type: string
+                type: object
+              proxy:
+                description: Proxy contains runtime configuration for ioFog Proxy
+                properties:
+                  serverName:
+                    type: string
+                  transport:
+                    type: integer
+                type: object
               database:
                 description: Database for ioFog Controller
                 properties:

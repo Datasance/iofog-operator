@@ -5,11 +5,34 @@ import (
 	"strings"
 )
 
-func GetConfig() string {
-	replacer := strings.NewReplacer("<MESSAGE_PORT>", strconv.Itoa(MessagePort),
+func GetConfig(requireSsl, saslMechanisms, authenticatePeer string, secretWithCa *bool) string {
+	// Default values for parameters
+	if requireSsl == "" {
+		requireSsl = "no"
+	}
+	if saslMechanisms == "" {
+		saslMechanisms = "ANONYMOUS"
+	}
+	if authenticatePeer == "" {
+		authenticatePeer = "no"
+	}
+
+	// Determine caFile based on secretWithCa
+	caFile := "ca.crt" // Default value
+	if secretWithCa != nil && !*secretWithCa {
+		caFile = "tls.crt"
+	}
+
+	replacer := strings.NewReplacer(
+		"<MESSAGE_PORT>", strconv.Itoa(MessagePort),
 		"<HTTP_PORT>", strconv.Itoa(HTTPPort),
 		"<INTERIOR_PORT>", strconv.Itoa(InteriorPort),
-		"<EDGE_PORT>", strconv.Itoa(EdgePort))
+		"<EDGE_PORT>", strconv.Itoa(EdgePort),
+		"<SASL_MECHANISMS>", saslMechanisms,
+		"<AUTHENTICATE_PEER>", authenticatePeer,
+		"<REQUIRE_SSL>", requireSsl,
+		"<HAS_CA>", caFile,
+	)
 
 	return replacer.Replace(rawRouterConfig)
 }
@@ -32,13 +55,15 @@ listener {
     host: 0.0.0.0
     port: <MESSAGE_PORT>
     role: normal
+    sslProfile: router-amqps
+    requireSsl: <REQUIRE_SSL>
 }
 
 sslProfile {
     name: router-amqps
     certFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.crt
     privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.key
-    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/ca.crt
+    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/<HAS_CA>
 }
 
 listener {
@@ -56,23 +81,27 @@ sslProfile {
     name: router-internal
     certFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.crt
     privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.key
-    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/ca.crt
+    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/<HAS_CA>
 }
 
 listener {
     role: inter-router
     host: 0.0.0.0
     port: <INTERIOR_PORT>
-    saslMechanisms: ANONYMOUS
-    authenticatePeer: no
+    saslMechanisms: <SASL_MECHANISMS>
+    authenticatePeer: <AUTHENTICATE_PEER>
+    sslProfile: router-internal
+    requireSsl: <REQUIRE_SSL>
 }
 
 listener {
     role: edge
     host: 0.0.0.0
     port: <EDGE_PORT>
-    saslMechanisms: ANONYMOUS
-    authenticatePeer: no
+    saslMechanisms: <SASL_MECHANISMS>
+    authenticatePeer: <AUTHENTICATE_PEER>
+    sslProfile: router-internal
+    requireSsl: <REQUIRE_SSL>
 }
 
 `

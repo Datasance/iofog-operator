@@ -14,7 +14,6 @@
 package controllers
 
 import (
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -150,6 +149,7 @@ func newDeployment(namespace string, ms *microservice) *appsv1.Deployment {
 				Spec: corev1.PodSpec{
 					ServiceAccountName: ms.name,
 					Volumes:            ms.volumes,
+					SecurityContext:    ms.securityContext,
 				},
 			},
 		},

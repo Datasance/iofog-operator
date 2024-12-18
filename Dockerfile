@@ -17,10 +17,10 @@ COPY ./hack/ ./hack/
 RUN make build
 RUN cp ./bin/iofog-operator /bin
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.5-1730489338
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 WORKDIR /
 
-RUN microdnf install shadow-utils && \
+RUN microdnf install -y shadow-utils && \
     microdnf clean all
 RUN useradd --uid 10000 runner
 

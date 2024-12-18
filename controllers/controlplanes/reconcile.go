@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -102,13 +103,15 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		scheme = "https"
 	}
 
-	// Create controller database
-	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
+	if config.db.Provider != "" {
+		// Create controller database
+		r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
 
-	// Create the database and wait for completion
-	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
-		r.log.Error(err, "Failed to create controller database")
-		return op.ReconcileWithError(err)
+		// Create the database and wait for completion
+		if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+			r.log.Error(err, "Failed to create controller database")
+			return op.ReconcileWithError(err)
+		}
 	}
 
 	// Create Controller Microservice
@@ -292,6 +295,8 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 		proxyImage:         r.cp.Spec.Images.Proxy,
 		https:              r.cp.Spec.Controller.Https,
 		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
+		routerServerName:   r.cp.Spec.Proxy.ServerName,
+		routerTransport:    r.cp.Spec.Proxy.Transport,
 		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
 		tcpProxyAddress:    r.cp.Spec.Ingresses.TCPProxy.Address,
 		watchNamespace:     r.cp.ObjectMeta.Namespace,
@@ -330,12 +335,29 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
 	// Configure
 	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
+	secretWithCa := new(bool)
+	*secretWithCa = true
+
+	// if internalSecret and amqpsSecret are provided check if ca.crt present
+	if r.cp.Spec.Router.InternalSecret != "" && r.cp.Spec.Router.AmqpsSecret != "" {
+		// Check for ca.crt in the provided secrets
+		if err := r.checkSecretsForCaCert(r.cp.Spec.Router.InternalSecret, r.cp.Spec.Router.AmqpsSecret, secretWithCa); err != nil {
+			return op.ReconcileWithError(err)
+		}
+	}
+
 	ms := newRouterMicroservice(routerMicroserviceConfig{
 		image:              r.cp.Spec.Images.Router,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		internalSecret:     r.cp.Spec.Router.InternalSecret,
+		amqpsSecret:        r.cp.Spec.Router.AmqpsSecret,
+		requireSsl:         r.cp.Spec.Router.RequireSsl,
+		saslMechanisms:     r.cp.Spec.Router.SaslMechanisms,
+		authenticatePeer:   r.cp.Spec.Router.AuthenticatePeer,
 		serviceType:        r.cp.Spec.Services.Router.Type,
 		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
 		volumeMountPath:    volumeMountPath,
+		secretWithCa:       secretWithCa,
 	})
 
 	// Service Account
@@ -386,9 +408,12 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 
 	r.log.Info(fmt.Sprintf("Found address %s for router reconcile for Controlplane %s", address, r.cp.Name))
 
-	// Secrets
-	if err = r.createRouterSecrets(ms, address); err != nil {
-		return op.ReconcileWithError(err)
+	// Skip createRouterSecrets if internalSecret and amqpsSecret are provided
+	if r.cp.Spec.Router.InternalSecret == "" && r.cp.Spec.Router.AmqpsSecret == "" {
+		// Proceed with creating router secrets
+		if err := r.createRouterSecrets(ms, address); err != nil {
+			return op.ReconcileWithError(err)
+		}
 	}
 
 	// Create secrets
@@ -412,6 +437,46 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	r.log.Info(fmt.Sprintf("op.Continue for router reconcile for Controlplane %s", r.cp.Name))
 
 	return op.Continue()
+}
+
+func (r *ControlPlaneReconciler) checkSecretsForCaCert(internalSecretName, amqpsSecretName string, secretWithCa *bool) error {
+	k8sClient, err := newK8sClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %v", err)
+	}
+
+	// Check internalSecret for ca.crt
+	if err := r.checkCaCertInSecret(k8sClient, internalSecretName, secretWithCa); err != nil {
+		return err
+	}
+
+	// Check amqpsSecret for ca.crt
+	if err := r.checkCaCertInSecret(k8sClient, amqpsSecretName, secretWithCa); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ControlPlaneReconciler) checkCaCertInSecret(k8sClient *k8sclient.Client, secretName string, secretWithCa *bool) error {
+	secret, err := k8sClient.CoreV1().Secrets(r.cp.ObjectMeta.Namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get secret %s: %v", secretName, err)
+	}
+
+	// Check if ca.crt exists in the secret
+	if _, exists := secret.Data["ca.crt"]; exists {
+		r.log.Info(fmt.Sprintf("Found ca.crt in secret %s", secretName))
+		*secretWithCa = true
+	} else {
+		r.log.Info(fmt.Sprintf("ca.crt not found in secret %s", secretName))
+		*secretWithCa = false
+	}
+
+	// Log updated secretWithCa
+	r.log.Info(fmt.Sprintf("Updated secretWithCa value: %v", *secretWithCa))
+
+	return nil
 }
 
 func (r *ControlPlaneReconciler) createRouterSecrets(ms *microservice, address string) (err error) {

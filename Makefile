@@ -2,9 +2,9 @@ OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
-LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.4
-LDFLAGS += -X $(PREFIX).proxyTag=v3.0.5
-LDFLAGS += -X $(PREFIX).routerTag=v3.2.3
+LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.5
+LDFLAGS += -X $(PREFIX).proxyTag=v3.1.0
+LDFLAGS += -X $(PREFIX).routerTag=v3.2.4
 LDFLAGS += -X $(PREFIX).controllerTag=v3.4.4
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
@@ -16,7 +16,7 @@ endif
 
 # Image URL to use all building/pushing image targets
 REGISTRY ?= ghcr.io/datasance
-VERSION_TAG ?= 3.4.10
+VERSION_TAG ?= 3.4.11
 IMG ?= operator:$(VERSION_TAG)
 BUNDLE_IMG ?= operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)

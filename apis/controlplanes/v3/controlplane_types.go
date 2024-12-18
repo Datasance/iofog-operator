@@ -54,6 +54,10 @@ type ControlPlaneSpec struct {
 	Images Images `json:"images,omitempty"`
 	// Controller contains runtime configuration for ioFog Controller
 	Controller Controller `json:"controller,omitempty"`
+	// Router contains runtime configuration for ioFog Router
+	Router Router `json:"router,omitempty"`
+	// Proxy contains runtime configuration for ioFog Proxy
+	Proxy Proxy `json:"proxy,omitempty"`
 }
 
 type Replicas struct {
@@ -133,12 +137,25 @@ type Ingresses struct {
 }
 
 type Controller struct {
-	PidBaseDir        string `json:"pidBaseDir,omitempty"`
-	EcnViewerPort     int    `json:"ecnViewerPort,omitempty"`
-	EcnViewerURL      string `json:"ecnViewerUrl,omitempty"`
-	ECNName           string `json:"ecn,omitempty"`
-	Https             *bool  `json:"https,omitempty"`
-	SecretName        string `json:"secretName,omitempty"`
+	PidBaseDir    string `json:"pidBaseDir,omitempty"`
+	EcnViewerPort int    `json:"ecnViewerPort,omitempty"`
+	EcnViewerURL  string `json:"ecnViewerUrl,omitempty"`
+	ECNName       string `json:"ecn,omitempty"`
+	Https         *bool  `json:"https,omitempty"`
+	SecretName    string `json:"secretName,omitempty"`
+}
+
+type Router struct {
+	InternalSecret   string `json:"internalSecret,omitempty"`
+	AmqpsSecret      string `json:"amqpsSecret,omitempty"`
+	RequireSsl       string `json:"requireSsl,omitempty"`
+	SaslMechanisms   string `json:"saslMechanisms,omitempty"`
+	AuthenticatePeer string `json:"authenticatePeer,omitempty"`
+}
+
+type Proxy struct {
+	ServerName string `json:"serverName,omitempty"`
+	Transport  string `json:"transport,omitempty"`
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane.
