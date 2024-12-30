@@ -110,7 +110,7 @@ func (r *ControlPlaneReconciler) createPersistentVolumeClaims(ctx context.Contex
 				AccessModes: []corev1.PersistentVolumeAccessMode{
 					corev1.ReadWriteOnce,
 				},
-				Resources: corev1.ResourceRequirements{
+				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
 						"storage": storageSize,
 					},

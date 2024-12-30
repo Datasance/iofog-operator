@@ -1,8 +1,15 @@
-FROM golang:1.22-alpine3.20 AS builder
+FROM golang:1.23-alpine3.20 AS builder
 
 WORKDIR /operator
 
 RUN apk add --update --no-cache bash curl git make
+
+ARG TARGETOS
+ARG TARGETARCH
+
+
+ENV GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH
 
 COPY ./go.* ./
 COPY ./Makefile ./
