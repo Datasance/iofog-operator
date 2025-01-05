@@ -43,7 +43,11 @@ type ApplicationReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=datasance.com,resources=applications,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=datasance.com,resources=apps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=datasance.com,resources=applications/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=datasance.com,resources=applications/finalizers,verbs=get;update;patch
+// +kubebuilder:rbac:groups=datasance.com,resources=apps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=datasance.com,resources=apps/finalizers,verbs=get;update;patch
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("application", request.NamespacedName)

@@ -327,7 +327,7 @@ CREATE TABLE IF NOT EXISTS MicroserviceStatuses (
     memory_usage BIGINT DEFAULT 0,
     container_id VARCHAR(255) DEFAULT '',
     percentage FLOAT DEFAULT 0.00,
-    error_message VARCHAR(255) DEFAULT '',
+    error_message TEXT,
     microservice_uuid VARCHAR(32),
     created_at DATETIME,
     updated_at DATETIME,

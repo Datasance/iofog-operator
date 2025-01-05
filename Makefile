@@ -5,7 +5,7 @@ PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.5
 LDFLAGS += -X $(PREFIX).proxyTag=v3.1.0
 LDFLAGS += -X $(PREFIX).routerTag=v3.2.4
-LDFLAGS += -X $(PREFIX).controllerTag=v3.4.4
+LDFLAGS += -X $(PREFIX).controllerTag=v3.4.6
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
@@ -16,7 +16,7 @@ endif
 
 # Image URL to use all building/pushing image targets
 REGISTRY ?= ghcr.io/datasance
-VERSION_TAG ?= 3.4.11
+VERSION_TAG ?= 3.4.12
 IMG ?= operator:$(VERSION_TAG)
 BUNDLE_IMG ?= operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -39,7 +39,7 @@ all: build
 .PHONY: build
 build: GOARGS += -ldflags "$(LDFLAGS)"
 build: fmt gen ## Build operator binary
-	go build $(GOARGS) -o bin/iofog-operator main.go
+	GOARCH=$(GOARCH) GOOS=$(GOOS) go build $(GOARGS) -o bin/iofog-operator main.go
 
 install: manifests kustomize ## Install CRDs into a cluster
 	$(KUSTOMIZE) build config/crd | kubectl apply -f -
@@ -103,7 +103,7 @@ golangci-lint: ## Install golangci
 ifeq (, $(shell which golangci-lint))
 	@{ \
 	set -e ;\
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0 ;\
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 ;\
 	}
 GOLANGCI_LINT=$(GOBIN)/golangci-lint
 else
@@ -114,7 +114,7 @@ controller-gen: ## Install controller-gen
 ifeq (, $(shell which controller-gen))
 	@{ \
 	set -e ;\
-	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0 ;\
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0 ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else

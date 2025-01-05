@@ -9,6 +9,7 @@ rules:
   - datasance.com
   resources:
   - applications
+  - apps
   verbs:
   - create
   - delete
@@ -21,6 +22,7 @@ rules:
   - datasance.com
   resources:
   - applications/status
+  - apps/status
   verbs:
   - get
   - patch
@@ -41,6 +43,7 @@ rules:
   - datasance.com
   resources:
   - controlplanes/status
+  - controlplanes/finalizers
   verbs:
   - get
   - patch
