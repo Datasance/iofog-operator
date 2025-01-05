@@ -22,13 +22,13 @@ func CreateControllerDatabase(host, user, password, provider, dbName string, por
 	case "mysql":
 		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, password, host, port)
 		migrationFile = "assets/database/db_migration_v1.0.2.sql"
-		seederFile = "assets/database/db_seeder_v1.0.1.sql"
+		seederFile = "assets/database/db_seeder_v1.0.2.sql"
 		checkDBQuery = fmt.Sprintf("SHOW DATABASES LIKE '%s'", dbName)
 		createDBQuery = fmt.Sprintf("CREATE DATABASE `%s`", dbName)
 	case "postgres":
 		dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable", host, port, user, password)
 		migrationFile = "assets/database/db_migration_postgre_v1.0.2.sql"
-		seederFile = "assets/database/db_seeder_postgre_v1.0.1.sql"
+		seederFile = "assets/database/db_seeder_postgre_v1.0.2.sql"
 		checkDBQuery = fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname='%s'", dbName)
 		createDBQuery = fmt.Sprintf("CREATE DATABASE %s", dbName)
 	default:
