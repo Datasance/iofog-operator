@@ -16,7 +16,7 @@ endif
 
 # Image URL to use all building/pushing image targets
 REGISTRY ?= ghcr.io/datasance
-VERSION_TAG ?= 3.4.12
+VERSION_TAG ?= 3.4.13
 IMG ?= operator:$(VERSION_TAG)
 BUNDLE_IMG ?= operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
