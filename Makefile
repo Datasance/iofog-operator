@@ -5,7 +5,7 @@ PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).portManagerTag=v3.1.5
 LDFLAGS += -X $(PREFIX).proxyTag=v3.1.0
 LDFLAGS += -X $(PREFIX).routerTag=v3.2.4
-LDFLAGS += -X $(PREFIX).controllerTag=v3.4.6
+LDFLAGS += -X $(PREFIX).controllerTag=v3.4.7
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
