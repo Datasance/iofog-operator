@@ -576,7 +576,7 @@ ADD COLUMN tls_cert TEXT,
 ADD COLUMN tls_key TEXT;
 
 CREATE TABLE IF NOT EXISTS MicroservicePubTags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     microservice_uuid VARCHAR(32),
     tag_id INT,
     FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
@@ -584,7 +584,7 @@ CREATE TABLE IF NOT EXISTS MicroservicePubTags (
 );
 
 CREATE TABLE IF NOT EXISTS MicroserviceSubTags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     microservice_uuid VARCHAR(32),
     tag_id INT,
     FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
@@ -592,6 +592,6 @@ CREATE TABLE IF NOT EXISTS MicroserviceSubTags (
 );
 
 CREATE INDEX idx_microservicepubtags_microservice_uuid ON MicroservicePubTags (microservice_uuid);
-CREATE INDEX idx_microservicesubtags_microservice_uuid ON MicroservicesubTags (microservice_uuid);
+CREATE INDEX idx_microservicesubtags_microservice_uuid ON MicroserviceSubTags (microservice_uuid);
 CREATE INDEX idx_microservicepubtags_tag_id ON MicroservicePubTags (tag_id);
-CREATE INDEX idx_microservicesubtags_tag_id ON MicroservicesubTags (tag_id);
+CREATE INDEX idx_microservicesubtags_tag_id ON MicroserviceSubTags (tag_id);
