@@ -575,20 +575,20 @@ ADD COLUMN ca_cert TEXT,
 ADD COLUMN tls_cert TEXT,
 ADD COLUMN tls_key TEXT;
 
-CREATE TABLE IF NOT EXISTS MicroservicePubTags (
+CREATE TABLE IF NOT EXISTS "MicroservicePubTags" (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     microservice_uuid VARCHAR(32),
     tag_id INT,
-    FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES Tags (id) ON DELETE CASCADE
+    FOREIGN KEY (microservice_uuid) REFERENCES "Microservices" (uuid) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES "Tags" (id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS MicroserviceSubTags (
+CREATE TABLE IF NOT EXISTS "MicroserviceSubTags" (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
     microservice_uuid VARCHAR(32),
     tag_id INT,
-    FOREIGN KEY (microservice_uuid) REFERENCES Microservices (uuid) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES Tags (id) ON DELETE CASCADE
+    FOREIGN KEY (microservice_uuid) REFERENCES "Microservices" (uuid) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES "Tags" (id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_microservicepubtags_microservice_uuid ON MicroservicePubTags (microservice_uuid);
