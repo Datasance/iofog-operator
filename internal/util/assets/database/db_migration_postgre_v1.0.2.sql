@@ -591,7 +591,7 @@ CREATE TABLE IF NOT EXISTS "MicroserviceSubTags" (
     FOREIGN KEY (tag_id) REFERENCES "Tags" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_microservicepubtags_microservice_uuid ON MicroservicePubTags (microservice_uuid);
-CREATE INDEX idx_microservicesubtags_microservice_uuid ON MicroserviceSubTags (microservice_uuid);
-CREATE INDEX idx_microservicepubtags_tag_id ON MicroservicePubTags (tag_id);
-CREATE INDEX idx_microservicesubtags_tag_id ON MicroserviceSubTags (tag_id);
+CREATE INDEX idx_microservicepubtags_microservice_uuid ON "MicroservicePubTags" (microservice_uuid);
+CREATE INDEX idx_microservicesubtags_microservice_uuid ON "MicroserviceSubTags" (microservice_uuid);
+CREATE INDEX idx_microservicepubtags_tag_id ON "MicroservicePubTags" (tag_id);
+CREATE INDEX idx_microservicesubtags_tag_id ON "MicroserviceSubTags" (tag_id);
