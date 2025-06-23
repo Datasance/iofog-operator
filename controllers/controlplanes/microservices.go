@@ -14,7 +14,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -66,6 +65,7 @@ type microservice struct {
 	imagePullSecret       string
 	replicas              int32
 	containers            []container
+	initContainers        []container
 	labels                map[string]string
 	annotations           map[string]string
 	secrets               []corev1.Secret
@@ -82,6 +82,7 @@ type container struct {
 	imagePullPolicy string
 	args            []string
 	readinessProbe  *corev1.Probe
+	livenessProbe   *corev1.Probe
 	env             []corev1.EnvVar
 	command         []string
 	ports           []corev1.ContainerPort
@@ -101,7 +102,7 @@ type controllerMicroserviceConfig struct {
 	loadBalancerAddr   string
 	auth               *cpv3.Auth
 	db                 *cpv3.Database
-	proxyImage         string
+	routerAdaptorImage string
 	routerImage        string
 	ecn                string
 	pidBaseDir         string
@@ -153,7 +154,24 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		availableDelay: 5,
 		name:           "controller",
 		labels: map[string]string{
-			"name": "controller",
+			"datasance.com/component": "controller",
+		},
+		rbacRules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				APIGroups: []string{""},
+				Resources: []string{"services"},
+			},
 		},
 		imagePullSecret: cfg.imagePullSecret,
 		replicas:        cfg.replicas,
@@ -214,9 +232,9 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		},
 		volumes: []corev1.Volume{},
 		securityContext: &corev1.PodSecurityContext{
-			RunAsUser:  pointer.Int64(10000), // UID
-			RunAsGroup: pointer.Int64(10000), // GID
-			FSGroup:    pointer.Int64(10000), // FSGroup
+			RunAsUser:  ptr.To[int64](10000), // UID
+			RunAsGroup: ptr.To[int64](10000), // GID
+			FSGroup:    ptr.To[int64](10000), // FSGroup
 		},
 		containers: []container{
 			{
@@ -375,19 +393,19 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						},
 					},
 					{
-						Name:  "SystemImages_Proxy_1",
-						Value: cfg.proxyImage,
+						Name:  "CONTROL_PLANE",
+						Value: "Kubernetes",
 					},
 					{
-						Name:  "SystemImages_Proxy_2",
-						Value: cfg.proxyImage,
+						Name:  "CONTROLLER_NAMESPACE",
+						Value: namespace,
 					},
 					{
-						Name:  "SystemImages_Router_1",
+						Name:  "ROUTER_IMAGE_1",
 						Value: cfg.routerImage,
 					},
 					{
-						Name:  "SystemImages_Router_2",
+						Name:  "ROUTER_IMAGE_2",
 						Value: cfg.routerImage,
 					},
 					{
@@ -457,244 +475,42 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 			MountPath: "/etc/pot/controller-cert/",
 		})
 
-		msvc.containers[0].command = []string{
-			"/bin/sh",
-			"-c",
-		}
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "SERVER_DEV_MODE",
+			Value: "false",
+		})
 
-		msvc.containers[0].args = []string{
-			// Check if ca.crt exists and conditionally configure the controller
-			`if [ -f /etc/pot/controller-cert/ca.crt ]; then 
-				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
-				iofog-controller config add -i /etc/pot/controller-cert/ca.crt && \
-				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
-				iofog-controller config dev-mode --off; 
-			else 
-				iofog-controller config add -c /etc/pot/controller-cert/tls.crt && \
-				iofog-controller config add -i /etc/pot/controller-cert/tls.crt && \
-				iofog-controller config add -k /etc/pot/controller-cert/tls.key && \
-				iofog-controller config dev-mode --off; 
-			fi && \
-			node /home/runner/.npm-global/lib/node_modules/@datasance/iofogcontroller/src/server.js`,
-		}
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "SSL_PATH_CERT",
+			Value: "/etc/pot/controller-cert/tls.crt",
+		})
+
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "SSL_PATH_KEY",
+			Value: "/etc/pot/controller-cert/tls.key",
+		})
+
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "SSL_PATH_INTERMEDIATE_CERT",
+			Value: "/etc/pot/controller-cert/ca.crt",
+		})
 
 	}
 
 	return msvc
 }
 
-type portManagerConfig struct {
-	image              string
-	imagePullSecret    string
-	proxyImage         string
-	https              *bool
-	scheme             string
-	serviceAnnotations map[string]string
-	routerServerName   string
-	routerTransport    string
-	httpProxyAddress   string
-	tcpProxyAddress    string
-	watchNamespace     string
-}
-
-func filterPortManagerConfig(cfg *portManagerConfig) {
-	if cfg.image == "" {
-		cfg.image = util.GetPortManagerImage()
-	}
-
-	if cfg.proxyImage == "" {
-		cfg.proxyImage = util.GetProxyImage()
-	}
-
-	if cfg.https == nil || *cfg.https == false {
-		cfg.scheme = "http"
-	} else {
-		cfg.scheme = "https"
-	}
-}
-
-func newPortManagerMicroservice(cfg *portManagerConfig) *microservice {
-	filterPortManagerConfig(cfg)
-
-	// Convert the serviceAnnotations map to a JSON string
-	var serviceAnnotationsJSON string
-	if len(cfg.serviceAnnotations) > 0 {
-		annotations, err := json.Marshal(cfg.serviceAnnotations)
-		if err == nil {
-			serviceAnnotationsJSON = string(annotations)
-		}
-	}
-
-	return &microservice{
-		mustRecreateOnRollout: true,
-		name:                  portManagerDeploymentName,
-		labels: map[string]string{
-			"name": "port-manager",
-		},
-		imagePullSecret: cfg.imagePullSecret,
-		replicas:        1,
-		rbacRules: []rbacv1.PolicyRule{
-			{
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-				APIGroups: []string{"", "apps"},
-				Resources: []string{"deployments", "services", "pods", "configmaps"},
-			},
-		},
-		secrets: []corev1.Secret{
-			{
-				Type: corev1.SecretTypeOpaque,
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: cfg.watchNamespace,
-					Name:      controllerCredentialsSecretName,
-				},
-			},
-		},
-		volumes: []corev1.Volume{},
-		containers: []container{
-			{
-				name:            "port-manager",
-				image:           cfg.image,
-				imagePullPolicy: "Always",
-				readinessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						Exec: &corev1.ExecAction{
-							Command: []string{
-								"stat",
-								"/tmp/operator-sdk-ready",
-							},
-						},
-					},
-					InitialDelaySeconds: 4,
-					TimeoutSeconds:      10,
-					PeriodSeconds:       5,
-					FailureThreshold:    2,
-				},
-				// resources: corev1.ResourceRequirements{
-				// 	 Limits: corev1.ResourceList{
-				// 	 	"cpu":    resource.MustParse("200m"),
-				// 	 	"memory": resource.MustParse("1Gi"),
-				// 	 },
-				// 	 Requests: corev1.ResourceList{
-				// 	 	"cpu":    resource.MustParse("50m"),
-				// 	 	"memory": resource.MustParse("200Mi"),
-				// 	 },
-				// },
-				volumeMounts: []corev1.VolumeMount{},
-				env: []corev1.EnvVar{
-					{
-						Name:  "WATCH_NAMESPACE",
-						Value: cfg.watchNamespace,
-					},
-					{
-						Name: "POD_NAME",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.name",
-							},
-						},
-					},
-					{
-						Name:  "OPERATOR_NAME",
-						Value: "port-manager",
-					},
-					{
-						Name: "KC_URL",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controlllerAuthCredentialsSecretName,
-								},
-								Key: controlllerAuthUrlSecretKey,
-							},
-						},
-					},
-					{
-						Name: "KC_REALM",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controlllerAuthCredentialsSecretName,
-								},
-								Key: controlllerAuthRealmSecretKey,
-							},
-						},
-					},
-					{
-						Name: "KC_CLIENT",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controlllerAuthCredentialsSecretName,
-								},
-								Key: controlllerAuthControllerClientSecretKey,
-							},
-						},
-					},
-					{
-						Name: "KC_CLIENT_SECRET",
-						ValueFrom: &corev1.EnvVarSource{
-							SecretKeyRef: &corev1.SecretKeySelector{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: controlllerAuthCredentialsSecretName,
-								},
-								Key: controlllerAuthControllerClientSecretSecretKey,
-							},
-						},
-					},
-					{
-						Name:  "PROXY_IMAGE",
-						Value: cfg.proxyImage,
-					},
-					{
-						Name:  "HTTP_PROXY_ADDRESS",
-						Value: cfg.httpProxyAddress,
-					},
-					{
-						Name:  "TCP_PROXY_ADDRESS",
-						Value: cfg.tcpProxyAddress,
-					},
-					{
-						Name:  "ROUTER_ADDRESS",
-						Value: routerName,
-					},
-					{
-						Name:  "PROXY_SERVICE_ANNOTATIONS",
-						Value: string(serviceAnnotationsJSON),
-					},
-					{
-						Name:  "ROUTER_SERVERNAME",
-						Value: cfg.routerServerName,
-					},
-					{
-						Name:  "ROUTER_TRANSPORT",
-						Value: cfg.routerTransport,
-					},
-					{
-						Name:  "CONTROLLER_SCHEME",
-						Value: cfg.scheme,
-					},
-					{
-						Name:  "PULL_SECRET_NAME",
-						Value: cfg.imagePullSecret,
-					},
-				},
-			},
-		},
-	}
-}
-
 type routerMicroserviceConfig struct {
 	image              string
+	adaptorImage       string
 	imagePullSecret    string
 	serviceType        string
 	serviceAnnotations map[string]string
 	volumeMountPath    string
-	internalSecret     string
-	amqpsSecret        string
-	requireSsl         string
-	saslMechanisms     string
-	authenticatePeer   string
-	secretWithCa       *bool
+	siteCA             string
+	localCA            string
+	siteSecret         string
+	localSecret        string
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -702,16 +518,28 @@ func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
 		cfg.image = util.GetRouterImage()
 	}
 
+	if cfg.adaptorImage == "" {
+		cfg.adaptorImage = util.GetRouterAdaptorImage()
+	}
+
 	if cfg.serviceType == "" {
 		cfg.serviceType = string(corev1.ServiceTypeLoadBalancer)
 	}
 
-	if cfg.internalSecret == "" {
-		cfg.internalSecret = routerName + "-internal"
+	if cfg.siteSecret == "" {
+		cfg.siteSecret = "pot-router-site-server"
 	}
 
-	if cfg.amqpsSecret == "" {
-		cfg.amqpsSecret = routerName + "-amqps"
+	if cfg.localSecret == "" {
+		cfg.localSecret = "pot-router-local-server"
+	}
+
+	if cfg.siteCA == "" {
+		cfg.siteCA = "pot-site-ca"
+	}
+
+	if cfg.localCA == "" {
+		cfg.localCA = "default-router-local-ca"
 	}
 
 	return cfg
@@ -723,9 +551,10 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 	return &microservice{
 		name: routerName,
 		labels: map[string]string{
-			"name":                 routerName,
-			"application":          "interior-router",
-			"skupper.io/component": "router",
+			"datasance.com/component": routerName,
+			"application":             "interior-router",
+			"skupper.io/component":    "router",
+			"skupper.io/type":         "site",
 		},
 		annotations: map[string]string{
 			"prometheus.io/port":   "9090",
@@ -758,6 +587,19 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 					},
 				},
 			},
+			// {
+			// 	name:          "router-internal",
+			// 	serviceType:   "ClusterIP",
+			// 	trafficPolicy: getTrafficPolicy("ClusterIP"),
+			// 	ports: []corev1.ServicePort{
+			// 		{
+			// 			Name:       "router-internal",
+			// 			Port:       5672,
+			// 			TargetPort: intstr.FromInt(5672),
+			// 			Protocol:   corev1.Protocol("TCP"),
+			// 		},
+			// 	},
+			// },
 		},
 		imagePullSecret: cfg.imagePullSecret,
 		replicas:        1,
@@ -767,21 +609,59 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				APIGroups: []string{""},
 				Resources: []string{"pods"},
 			},
+			{
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				APIGroups: []string{"coordination.k8s.io"},
+				Resources: []string{"leases"},
+			},
+			{
+				Verbs:     []string{"get"},
+				APIGroups: []string{"apps"},
+				Resources: []string{"deployments"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{""},
+				Resources: []string{"services"},
+			},
 		},
 		volumes: []corev1.Volume{
 			{
-				Name: routerName + "-internal",
+				Name: "pot-router-certs",
 				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: cfg.internalSecret,
-					},
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
 				},
 			},
+		},
+		initContainers: []container{
 			{
-				Name: routerName + "-amqps",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: cfg.amqpsSecret,
+				name:            "router-config-init",
+				image:           cfg.adaptorImage,
+				imagePullPolicy: "Always",
+				command: []string{
+					"/app/kube-adaptor",
+					"-init",
+				},
+				env: []corev1.EnvVar{
+					{
+						Name:  "SKUPPER_ROUTER_CONFIG",
+						Value: "pot-router",
+					},
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "pot-router-certs",
+						MountPath: "/etc/skupper-router-certs",
 					},
 				},
 			},
@@ -794,17 +674,55 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				command: []string{
 					"/home/skrouterd/bin/launch.sh",
 				},
+				ports: []corev1.ContainerPort{
+					{
+						Name:          "amqps",
+						ContainerPort: 5671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "http",
+						ContainerPort: 9090,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "inter-router",
+						ContainerPort: 55671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "edge",
+						ContainerPort: 45671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+				},
 				readinessProbe: &corev1.Probe{
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
-							Port: intstr.FromInt(9090), //nolint:gomnd
-							Path: "/healthz",
+							Port:   intstr.FromInt(9090),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
 						},
 					},
-					InitialDelaySeconds: 10,
-					TimeoutSeconds:      10,
-					PeriodSeconds:       5,
-					FailureThreshold:    2,
+					InitialDelaySeconds: 1,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				livenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Port:   intstr.FromInt(9090),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
+						},
+					},
+					InitialDelaySeconds: 60,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
 				},
 				env: []corev1.EnvVar{
 					{
@@ -817,7 +735,15 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 					},
 					{
 						Name:  "QDROUTERD_CONF",
-						Value: router.GetConfig(cfg.requireSsl, cfg.saslMechanisms, cfg.authenticatePeer, cfg.secretWithCa),
+						Value: "/etc/skupper-router-certs/skrouterd.json",
+					},
+					{
+						Name:  "QDROUTERD_CONF_TYPE",
+						Value: "json",
+					},
+					{
+						Name:  "SKUPPER_SITE_ID",
+						Value: "default-router",
 					},
 					{
 						Name: "POD_NAMESPACE",
@@ -838,24 +764,65 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{
-						Name:      routerName + "-internal",
-						MountPath: cfg.volumeMountPath + "/" + routerName + "-internal",
-					},
-					{
-						Name:      routerName + "-amqps",
-						MountPath: cfg.volumeMountPath + "/" + routerName + "-amqps",
+						Name:      "pot-router-certs",
+						MountPath: cfg.volumeMountPath,
 					},
 				},
-				// resources: corev1.ResourceRequirements{
-				// 	 Limits: corev1.ResourceList{
-				// 	 	"cpu":    resource.MustParse("200m"),
-				// 	 	"memory": resource.MustParse("1Gi"),
-				// 	 },
-				// 	 Requests: corev1.ResourceList{
-				// 	 	"cpu":    resource.MustParse("50m"),
-				// 	 	"memory": resource.MustParse("200Mi"),
-				// 	 },
-				// },
+			},
+			{
+				name:            "router-adaptor",
+				image:           cfg.adaptorImage,
+				imagePullPolicy: "Always",
+				env: []corev1.EnvVar{
+					{
+						Name: "SKUPPER_NAMESPACE",
+						ValueFrom: &corev1.EnvVarSource{
+							FieldRef: &corev1.ObjectFieldSelector{
+								FieldPath: "metadata.namespace",
+							},
+						},
+					},
+					{
+						Name: "SKUPPER_NAME",
+						ValueFrom: &corev1.EnvVarSource{
+							FieldRef: &corev1.ObjectFieldSelector{
+								FieldPath: "metadata.namespace",
+							},
+						},
+					},
+					{
+						Name:  "SKUPPER_SITE_ID",
+						Value: "default-router",
+					},
+					{
+						Name:  "SKUPPER_ROUTER_CONFIG",
+						Value: "pot-router",
+					},
+					{
+						Name:  "SKUPPER_ROUTER_DEPLOYMENT",
+						Value: "router",
+					},
+				},
+				readinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Port:   intstr.FromInt(9191),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
+						},
+					},
+					InitialDelaySeconds: 1,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "pot-router-certs",
+						MountPath: "/etc/skupper-router-certs",
+					},
+				},
 			},
 		},
 	}

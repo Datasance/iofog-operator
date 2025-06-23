@@ -5,103 +5,129 @@ import (
 	"strings"
 )
 
-func GetConfig(requireSsl, saslMechanisms, authenticatePeer string, secretWithCa *bool) string {
+func GetConfig(namespace string) string {
 	// Default values for parameters
-	if requireSsl == "" {
-		requireSsl = "no"
-	}
-	if saslMechanisms == "" {
-		saslMechanisms = "ANONYMOUS"
-	}
-	if authenticatePeer == "" {
-		authenticatePeer = "no"
-	}
-
-	// Determine caFile based on secretWithCa
-	caFile := "ca.crt" // Default value
-	if secretWithCa != nil && !*secretWithCa {
-		caFile = "tls.crt"
-	}
-
 	replacer := strings.NewReplacer(
 		"<MESSAGE_PORT>", strconv.Itoa(MessagePort),
 		"<HTTP_PORT>", strconv.Itoa(HTTPPort),
 		"<INTERIOR_PORT>", strconv.Itoa(InteriorPort),
 		"<EDGE_PORT>", strconv.Itoa(EdgePort),
-		"<SASL_MECHANISMS>", saslMechanisms,
-		"<AUTHENTICATE_PEER>", authenticatePeer,
-		"<REQUIRE_SSL>", requireSsl,
-		"<HAS_CA>", caFile,
+		"<NAMESPACE>", namespace,
 	)
 
 	return replacer.Replace(rawRouterConfig)
 }
 
 const (
-	MessagePort  = 5672
+	MessagePort  = 5671
 	HTTPPort     = 9090
-	InteriorPort = 55672
-	EdgePort     = 45672
+	InteriorPort = 55671
+	EdgePort     = 45671
 )
 
 const rawRouterConfig = `
-router {
-    mode: interior
-    id: default-router
-    saslConfigDir: /etc/sasl2/
-}
-
-listener {
-    host: 0.0.0.0
-    port: <MESSAGE_PORT>
-    role: normal
-    sslProfile: router-amqps
-    requireSsl: <REQUIRE_SSL>
-}
-
-sslProfile {
-    name: router-amqps
-    certFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.crt
-    privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/tls.key
-    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-amqps/<HAS_CA>
-}
-
-listener {
-    host: 0.0.0.0
-    port: <HTTP_PORT>
-    role: normal
-    http: true
-    httpRootDir: disabled
-    websockets: false
-    healthz: true
-    metrics: true
-}
-
-sslProfile {
-    name: router-internal
-    certFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.crt
-    privateKeyFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/tls.key
-    caCertFile: /etc/skupper-router/qpid-dispatch-certs/router-internal/<HAS_CA>
-}
-
-listener {
-    role: inter-router
-    host: 0.0.0.0
-    port: <INTERIOR_PORT>
-    saslMechanisms: <SASL_MECHANISMS>
-    authenticatePeer: <AUTHENTICATE_PEER>
-    sslProfile: router-internal
-    requireSsl: <REQUIRE_SSL>
-}
-
-listener {
-    role: edge
-    host: 0.0.0.0
-    port: <EDGE_PORT>
-    saslMechanisms: <SASL_MECHANISMS>
-    authenticatePeer: <AUTHENTICATE_PEER>
-    sslProfile: router-internal
-    requireSsl: <REQUIRE_SSL>
-}
-
+[
+    [
+        "router",
+        {
+            "id": "default-router",
+            "mode": "interior",
+            "helloMaxAgeSeconds": "3",
+            "metadata": "{\"id\":\"default-router\",\"version\":\"pot\",\"platform\":\"kubernetes\",\"pot-config\":\"1.0.0\"}"
+        }
+    ],
+    [
+        "site",
+        {
+            "name": "default-router",
+            "platform": "kubernetes",
+            "namespace": "<NAMESPACE>",
+            "version": "pot"
+        }
+    ],
+    [
+        "sslProfile",
+        {
+            "name": "pot-router-site-server",
+            "certFile": "/etc/skupper-router-certs/pot-router-site-server/tls.crt",
+            "privateKeyFile": "/etc/skupper-router-certs/pot-router-site-server/tls.key",
+            "caCertFile": "/etc/skupper-router-certs/pot-router-site-server/ca.crt"
+        }
+    ],
+    [
+        "sslProfile",
+        {
+            "name": "pot-router-local-server",
+            "certFile": "/etc/skupper-router-certs/pot-router-local-server/tls.crt",
+            "privateKeyFile": "/etc/skupper-router-certs/pot-router-local-server/tls.key",
+            "caCertFile": "/etc/skupper-router-certs/pot-router-local-server/ca.crt"
+        }
+    ],
+    [
+        "listener",
+        {
+            "name": "pot-router-edge",
+            "role": "edge",
+            "port": <EDGE_PORT>,
+            "sslProfile": "pot-router-site-server",
+            "saslMechanisms": "EXTERNAL",
+            "authenticatePeer": true
+        }
+    ],
+    [
+        "listener",
+        {
+            "name": "amqp",
+            "host": "localhost",
+            "port": 5672
+        }
+    ],
+    [
+        "listener",
+        {
+            "name": "amqps",
+            "port": <MESSAGE_PORT>,
+            "sslProfile": "pot-router-local-server",
+            "saslMechanisms": "EXTERNAL",
+            "authenticatePeer": true
+        }
+    ],
+    [
+        "listener",
+        {
+            "name": "@9090",
+            "role": "normal",
+            "port": <HTTP_PORT>,
+            "http": true,
+            "httpRootDir": "disabled",
+            "healthz": true,
+            "metrics": true
+        }
+    ],
+    [
+        "listener",
+        {
+            "name": "pot-router-inter-router",
+            "role": "inter-router",
+            "port": <INTERIOR_PORT>,
+            "sslProfile": "pot-router-site-server",
+            "saslMechanisms": "EXTERNAL",
+            "authenticatePeer": true
+        }
+    ],
+    [
+        "address",
+        {
+            "prefix": "mc",
+            "distribution": "multicast"
+        }
+    ],
+    [
+        "log",
+        {
+            "module": "ROUTER_CORE",
+            "enable": "error+"
+        }
+    ]
+]
 `

@@ -471,6 +471,196 @@ func (r *ControlPlaneReconciler) createDefaultRouter(iofogClient *iofogclient.Cl
 	return iofogClient.PutDefaultRouter(routerConfig)
 }
 
+// ConfigEntry represents a single entry in the router configuration
+type ConfigEntry []interface{}
+
+// shouldUpdate determines if a config entry should be updated based on its type and name
+func shouldUpdate(entry ConfigEntry) bool {
+	if len(entry) != 2 {
+		return false
+	}
+
+	entryType, ok := entry[0].(string)
+	if !ok {
+		return false
+	}
+
+	data, ok := entry[1].(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	switch entryType {
+	case "router", "site", "address", "log":
+		return true
+	case "sslProfile":
+		if name, ok := data["name"].(string); ok {
+			return name == "pot-router-site-server" || name == "pot-router-local-server"
+		}
+		return false
+	case "listener":
+		if name, ok := data["name"].(string); ok {
+			return name == "pot-router-edge" || name == "amqp" ||
+				name == "amqps" || name == "@9090" ||
+				name == "pot-router-inter-router"
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// getConfigVersion extracts the pot-config version from the router metadata
+func getConfigVersion(config string) (string, error) {
+	var entries []ConfigEntry
+	if err := json.Unmarshal([]byte(config), &entries); err != nil {
+		return "", fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	for _, entry := range entries {
+		if len(entry) != 2 {
+			continue
+		}
+
+		entryType, ok := entry[0].(string)
+		if !ok || entryType != "router" {
+			continue
+		}
+
+		data, ok := entry[1].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if metadata, ok := data["metadata"].(string); ok {
+			var metadataMap map[string]interface{}
+			if err := json.Unmarshal([]byte(metadata), &metadataMap); err != nil {
+				return "", fmt.Errorf("failed to parse metadata: %w", err)
+			}
+			if version, ok := metadataMap["pot-config"].(string); ok {
+				return version, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// mergeConfigs merges existing and new router configurations
+func mergeConfigs(existingConfig, newConfig string) (string, error) {
+	// Check versions
+	existingVersion, err := getConfigVersion(existingConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to get existing config version: %w", err)
+	}
+
+	newVersion, err := getConfigVersion(newConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to get new config version: %w", err)
+	}
+
+	// If versions are the same, keep existing config
+	if existingVersion != "" && existingVersion == newVersion {
+		return existingConfig, nil
+	}
+
+	var existing, new []ConfigEntry
+
+	// Parse existing config
+	if err := json.Unmarshal([]byte(existingConfig), &existing); err != nil {
+		return "", fmt.Errorf("failed to parse existing config: %w", err)
+	}
+
+	// Parse new config
+	if err := json.Unmarshal([]byte(newConfig), &new); err != nil {
+		return "", fmt.Errorf("failed to parse new config: %w", err)
+	}
+
+	// Create map of existing entries for quick lookup
+	existingMap := make(map[string]ConfigEntry)
+	for _, entry := range existing {
+		existingMap[entry[0].(string)] = entry
+	}
+
+	// Process new config
+	result := make([]ConfigEntry, 0)
+	for _, entry := range new {
+		if shouldUpdate(entry) {
+			// Update specified sections
+			result = append(result, entry)
+		} else if existing, exists := existingMap[entry[0].(string)]; exists {
+			// Keep existing version
+			result = append(result, existing)
+		}
+	}
+
+	// Add any remaining existing entries that weren't in new config
+	for _, entry := range existing {
+		if !shouldUpdate(entry) {
+			result = append(result, entry)
+		}
+	}
+
+	// Marshal back to JSON
+	mergedConfig, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal merged config: %w", err)
+	}
+
+	return string(mergedConfig), nil
+}
+
+func (r *ControlPlaneReconciler) createConfigMap(ctx context.Context) error {
+	configMap := newRouterConfigMap(r.cp.ObjectMeta.Namespace)
+
+	// Set owner reference
+	if err := controllerutil.SetControllerReference(&r.cp, configMap, r.Scheme); err != nil {
+		return err
+	}
+
+	// Try to get existing ConfigMap
+	existingConfigMap := &corev1.ConfigMap{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, existingConfigMap)
+
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			// ConfigMap doesn't exist, create it
+			return r.Client.Create(ctx, configMap)
+		}
+		return err
+	}
+
+	// ConfigMap exists, merge configurations
+	mergedConfig, err := mergeConfigs(existingConfigMap.Data["skrouterd.json"], configMap.Data["skrouterd.json"])
+	if err != nil {
+		return fmt.Errorf("failed to merge configs: %w", err)
+	}
+
+	// Update ConfigMap with merged configuration
+	existingConfigMap.Data["skrouterd.json"] = mergedConfig
+	return r.Client.Update(ctx, existingConfigMap)
+}
+
+func (r *ControlPlaneReconciler) ImportRouterCACertificate(iofogClient *iofogclient.Client, secretName string) (err error) {
+
+	// Create CA certificate
+	request := iofogclient.CACreateRequest{
+		Name:       secretName,
+		Type:       "k8s-secret",
+		SecretName: secretName,
+	}
+
+	_, err = iofogClient.GetCA(secretName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "NotFoundError") {
+			return err
+		}
+
+		return iofogClient.CreateCA(&request)
+	}
+
+	return err
+}
+
 func DecodeBase64(encoded string) (string, error) {
 	decodedBytes, err := b64.StdEncoding.DecodeString(encoded)
 	if err != nil {

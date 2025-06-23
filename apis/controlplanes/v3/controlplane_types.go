@@ -54,10 +54,8 @@ type ControlPlaneSpec struct {
 	Images Images `json:"images,omitempty"`
 	// Controller contains runtime configuration for ioFog Controller
 	Controller Controller `json:"controller,omitempty"`
-	// Router contains runtime configuration for ioFog Router
-	Router Router `json:"router,omitempty"`
-	// Proxy contains runtime configuration for ioFog Proxy
-	Proxy Proxy `json:"proxy,omitempty"`
+	// // Router contains runtime configuration for ioFog Router
+	// Router Router `json:"router,omitempty"`
 }
 
 type Replicas struct {
@@ -67,7 +65,6 @@ type Replicas struct {
 type Services struct {
 	Controller Service `json:"controller,omitempty"`
 	Router     Service `json:"router,omitempty"`
-	Proxy      Service `json:"proxy,omitempty"`
 }
 
 type Service struct {
@@ -77,11 +74,10 @@ type Service struct {
 }
 
 type Images struct {
-	PullSecret  string `json:"pullSecret,omitempty"`
-	Controller  string `json:"controller,omitempty"`
-	Router      string `json:"router,omitempty"`
-	PortManager string `json:"portManager,omitempty"`
-	Proxy       string `json:"proxy,omitempty"`
+	PullSecret    string `json:"pullSecret,omitempty"`
+	Controller    string `json:"controller,omitempty"`
+	Router        string `json:"router,omitempty"`
+	RouterAdaptor string `json:"routerAdaptor,omitempty"`
 }
 
 type Auth struct {
@@ -132,8 +128,6 @@ type Ingress struct {
 type Ingresses struct {
 	Controller ControllerIngress `json:"controller,omitempty"`
 	Router     RouterIngress     `json:"router,omitempty"`
-	HTTPProxy  Ingress           `json:"httpProxy,omitempty"`
-	TCPProxy   Ingress           `json:"tcpProxy,omitempty"`
 }
 
 type Controller struct {
@@ -145,18 +139,13 @@ type Controller struct {
 	SecretName    string `json:"secretName,omitempty"`
 }
 
-type Router struct {
-	InternalSecret   string `json:"internalSecret,omitempty"`
-	AmqpsSecret      string `json:"amqpsSecret,omitempty"`
-	RequireSsl       string `json:"requireSsl,omitempty"`
-	SaslMechanisms   string `json:"saslMechanisms,omitempty"`
-	AuthenticatePeer string `json:"authenticatePeer,omitempty"`
-}
-
-type Proxy struct {
-	ServerName string `json:"serverName,omitempty"`
-	Transport  string `json:"transport,omitempty"`
-}
+// type Router struct {
+// 	InternalSecret   string `json:"internalSecret,omitempty"`
+// 	AmqpsSecret      string `json:"amqpsSecret,omitempty"`
+// 	RequireSsl       string `json:"requireSsl,omitempty"`
+// 	SaslMechanisms   string `json:"saslMechanisms,omitempty"`
+// 	AuthenticatePeer string `json:"authenticatePeer,omitempty"`
+// }
 
 // ControlPlaneStatus defines the observed state of ControlPlane.
 type ControlPlaneStatus struct {

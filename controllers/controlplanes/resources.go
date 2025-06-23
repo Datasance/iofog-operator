@@ -14,6 +14,7 @@
 package controllers
 
 import (
+	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -155,6 +156,27 @@ func newDeployment(namespace string, ms *microservice) *appsv1.Deployment {
 		},
 	}
 
+	// Handle init containers
+	initContainers := &dep.Spec.Template.Spec.InitContainers
+	for i := range ms.initContainers {
+		msInitCont := &ms.initContainers[i]
+		initCont := corev1.Container{
+			Name:            msInitCont.name,
+			Image:           msInitCont.image,
+			Command:         msInitCont.command,
+			Args:            msInitCont.args,
+			Ports:           msInitCont.ports,
+			Env:             msInitCont.env,
+			Resources:       msInitCont.resources,
+			ReadinessProbe:  msInitCont.readinessProbe,
+			LivenessProbe:   msInitCont.livenessProbe,
+			VolumeMounts:    msInitCont.volumeMounts,
+			ImagePullPolicy: corev1.PullPolicy(msInitCont.imagePullPolicy),
+		}
+		*initContainers = append(*initContainers, initCont)
+	}
+
+	// Handle main containers
 	containers := &dep.Spec.Template.Spec.Containers
 	for i := range ms.containers {
 		msCont := &ms.containers[i]
@@ -167,6 +189,7 @@ func newDeployment(namespace string, ms *microservice) *appsv1.Deployment {
 			Env:             msCont.env,
 			Resources:       msCont.resources,
 			ReadinessProbe:  msCont.readinessProbe,
+			LivenessProbe:   msCont.livenessProbe,
 			VolumeMounts:    msCont.volumeMounts,
 			ImagePullPolicy: corev1.PullPolicy(msCont.imagePullPolicy),
 		}
@@ -212,5 +235,17 @@ func newRole(namespace string, ms *microservice) *rbacv1.Role {
 			Namespace: namespace,
 		},
 		Rules: ms.rbacRules,
+	}
+}
+
+func newRouterConfigMap(namespace string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pot-router",
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"skrouterd.json": router.GetConfig(namespace),
+		},
 	}
 }

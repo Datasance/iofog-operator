@@ -13,20 +13,19 @@ import (
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
-	"github.com/datasance/iofog-operator/v3/internal/util"
-	"github.com/skupperproject/skupper/pkg/certs"
+	util "github.com/datasance/iofog-operator/v3/internal/util/certs"
+
+	// "github.com/skupperproject/skupper/pkg/certs"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
-	loadBalancerTimeout       = 360
-	errProxyRouterMissing     = "missing Proxy.Router data for non LoadBalancer Router service"
-	errParseControllerURL     = "failed to parse Controller endpoint as URL (%s): %s"
-	portManagerDeploymentName = "port-manager"
+	loadBalancerTimeout   = 360
+	errProxyRouterMissing = "missing Proxy.Router data for non LoadBalancer Router service"
+	errParseControllerURL = "failed to parse Controller endpoint as URL (%s): %s"
 )
 
 func reconcileRoutine(ctx context.Context, recon func(context.Context) op.Reconciliation, reconChan chan op.Reconciliation) {
@@ -73,7 +72,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		replicas:           r.cp.Spec.Replicas.Controller,
 		image:              r.cp.Spec.Images.Controller,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		proxyImage:         r.cp.Spec.Images.Proxy,
+		routerAdaptorImage: r.cp.Spec.Images.RouterAdaptor,
 		routerImage:        r.cp.Spec.Images.Router,
 		db:                 &r.cp.Spec.Database,
 		auth:               &r.cp.Spec.Auth,
@@ -103,22 +102,32 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		scheme = "https"
 	}
 
-	if config.db.Provider != "" {
-		// Create controller database
-		r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
+	// if config.db.Provider != "" {
+	// 	// Create controller database
+	// 	r.log.Info(fmt.Sprintf("Creating Controller Database %s", config.db.DatabaseName))
 
-		// Create the database and wait for completion
-		if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
-			r.log.Error(err, "Failed to create controller database")
-			return op.ReconcileWithError(err)
-		}
-	}
+	// 	// Create the database and wait for completion
+	// 	if err := util.CreateControllerDatabase(config.db.Host, config.db.User, config.db.Password, config.db.Provider, config.db.DatabaseName, config.db.Port); err != nil {
+	// 		r.log.Error(err, "Failed to create controller database")
+	// 		return op.ReconcileWithError(err)
+	// 	}
+	// }
 
 	// Create Controller Microservice
 	ms := newControllerMicroservice(r.cp.Namespace, config)
 
 	// Service Account
 	if err := r.createServiceAccount(ctx, ms); err != nil {
+		return op.ReconcileWithError(err)
+	}
+
+	// Role
+	if err := r.createRole(ctx, ms); err != nil {
+		return op.ReconcileWithError(err)
+	}
+
+	// Role binding
+	if err := r.createRoleBinding(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
 	}
 
@@ -221,8 +230,12 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		return op.ReconcileWithError(err)
 	}
 
-	// Wait for Controller LB to actually work
+	// Import router certificates
+	if recon := r.ImportCertificates(iofogClient); recon.IsFinal() {
+		return recon
+	}
 
+	// Wait for Controller LB to actually work
 	r.log.Info(fmt.Sprintf("Waiting for IP/LB Service in iofog-controller reconcile for ControlPlane %s", r.cp.Name))
 
 	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeLoadBalancer)) {
@@ -288,45 +301,16 @@ func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port
 	return iofogClient, op.Continue()
 }
 
-func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Reconciliation {
-	ms := newPortManagerMicroservice(&portManagerConfig{
-		image:              r.cp.Spec.Images.PortManager,
-		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		proxyImage:         r.cp.Spec.Images.Proxy,
-		https:              r.cp.Spec.Controller.Https,
-		serviceAnnotations: r.cp.Spec.Services.Proxy.Annotations,
-		routerServerName:   r.cp.Spec.Proxy.ServerName,
-		routerTransport:    r.cp.Spec.Proxy.Transport,
-		httpProxyAddress:   r.cp.Spec.Ingresses.HTTPProxy.Address,
-		tcpProxyAddress:    r.cp.Spec.Ingresses.TCPProxy.Address,
-		watchNamespace:     r.cp.ObjectMeta.Namespace,
-	})
-
-	// Service Account
-	if err := r.createServiceAccount(ctx, ms); err != nil {
-		return op.ReconcileWithError(err)
-	}
-	// Role
-	if err := r.createRole(ctx, ms); err != nil {
-		return op.ReconcileWithError(err)
-	}
-	// RoleBinding
-	if err := r.createRoleBinding(ctx, ms); err != nil {
-		return op.ReconcileWithError(err)
+func (r *ControlPlaneReconciler) ImportCertificates(iofogClient *iofogclient.Client) op.Reconciliation {
+	r.log.Info(fmt.Sprintf("Importing certificates for ControlPlane %s", r.cp.Name))
+	if err := r.ImportRouterCACertificate(iofogClient, "pot-site-ca"); err != nil {
+		r.log.Info(fmt.Sprintf("Failed to import certificates for ControlPlane %s: %s", r.cp.Name, err.Error()))
+		return op.ReconcileWithRequeue(time.Second * 10)
 	}
 
-	// Create secrets
-	r.log.Info(fmt.Sprintf("Creating secrets for port-manager reconcile for Controlplane %s", r.cp.Name))
-
-	if err := r.createSecrets(ctx, ms); err != nil {
-		r.log.Info(fmt.Sprintf("Failed to create secrets %v for port-manager reconcile for Controlplane %s", err, r.cp.Name))
-
-		return op.ReconcileWithError(err)
-	}
-
-	// Deployment
-	if err := r.createDeployment(ctx, ms); err != nil {
-		return op.ReconcileWithError(err)
+	if err := r.ImportRouterCACertificate(iofogClient, "default-router-local-ca"); err != nil {
+		r.log.Info(fmt.Sprintf("Failed to import certificates for ControlPlane %s: %s", r.cp.Name, err.Error()))
+		return op.ReconcileWithRequeue(time.Second * 10)
 	}
 
 	return op.Continue()
@@ -334,30 +318,15 @@ func (r *ControlPlaneReconciler) reconcilePortManager(ctx context.Context) op.Re
 
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
 	// Configure
-	volumeMountPath := "/etc/skupper-router/qpid-dispatch-certs/"
-	secretWithCa := new(bool)
-	*secretWithCa = true
-
-	// if internalSecret and amqpsSecret are provided check if ca.crt present
-	if r.cp.Spec.Router.InternalSecret != "" && r.cp.Spec.Router.AmqpsSecret != "" {
-		// Check for ca.crt in the provided secrets
-		if err := r.checkSecretsForCaCert(r.cp.Spec.Router.InternalSecret, r.cp.Spec.Router.AmqpsSecret, secretWithCa); err != nil {
-			return op.ReconcileWithError(err)
-		}
-	}
+	volumeMountPath := "/etc/skupper-router-certs"
 
 	ms := newRouterMicroservice(routerMicroserviceConfig{
 		image:              r.cp.Spec.Images.Router,
+		adaptorImage:       r.cp.Spec.Images.RouterAdaptor,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		internalSecret:     r.cp.Spec.Router.InternalSecret,
-		amqpsSecret:        r.cp.Spec.Router.AmqpsSecret,
-		requireSsl:         r.cp.Spec.Router.RequireSsl,
-		saslMechanisms:     r.cp.Spec.Router.SaslMechanisms,
-		authenticatePeer:   r.cp.Spec.Router.AuthenticatePeer,
 		serviceType:        r.cp.Spec.Services.Router.Type,
 		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
 		volumeMountPath:    volumeMountPath,
-		secretWithCa:       secretWithCa,
 	})
 
 	// Service Account
@@ -408,20 +377,23 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 
 	r.log.Info(fmt.Sprintf("Found address %s for router reconcile for Controlplane %s", address, r.cp.Name))
 
-	// Skip createRouterSecrets if internalSecret and amqpsSecret are provided
-	if r.cp.Spec.Router.InternalSecret == "" && r.cp.Spec.Router.AmqpsSecret == "" {
-		// Proceed with creating router secrets
-		if err := r.createRouterSecrets(ms, address); err != nil {
-			return op.ReconcileWithError(err)
-		}
+	if err := r.createRouterSecrets(r.cp.ObjectMeta.Namespace, ms, address); err != nil {
+		return op.ReconcileWithError(err)
 	}
-
 	// Create secrets
 	r.log.Info(fmt.Sprintf("Creating secrets for router reconcile for Controlplane %s", r.cp.Name))
 
 	if err := r.createSecrets(ctx, ms); err != nil {
 		r.log.Info(fmt.Sprintf("Failed to create secrets %v for router reconcile for Controlplane %s", err, r.cp.Name))
 
+		return op.ReconcileWithError(err)
+	}
+
+	// Router ConfigMap
+	r.log.Info(fmt.Sprintf("Creating configmap for router reconcile for Controlplane %s", r.cp.Name))
+
+	if err := r.createConfigMap(ctx); err != nil {
+		r.log.Info(fmt.Sprintf("Failed to create configmap %v for router reconcile for Controlplane %s", err, r.cp.Name))
 		return op.ReconcileWithError(err)
 	}
 
@@ -439,47 +411,10 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	return op.Continue()
 }
 
-func (r *ControlPlaneReconciler) checkSecretsForCaCert(internalSecretName, amqpsSecretName string, secretWithCa *bool) error {
-	k8sClient, err := newK8sClient()
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %v", err)
-	}
-
-	// Check internalSecret for ca.crt
-	if err := r.checkCaCertInSecret(k8sClient, internalSecretName, secretWithCa); err != nil {
-		return err
-	}
-
-	// Check amqpsSecret for ca.crt
-	if err := r.checkCaCertInSecret(k8sClient, amqpsSecretName, secretWithCa); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ControlPlaneReconciler) checkCaCertInSecret(k8sClient *k8sclient.Client, secretName string, secretWithCa *bool) error {
-	secret, err := k8sClient.CoreV1().Secrets(r.cp.ObjectMeta.Namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get secret %s: %v", secretName, err)
-	}
-
-	// Check if ca.crt exists in the secret
-	if _, exists := secret.Data["ca.crt"]; exists {
-		r.log.Info(fmt.Sprintf("Found ca.crt in secret %s", secretName))
-		*secretWithCa = true
-	} else {
-		r.log.Info(fmt.Sprintf("ca.crt not found in secret %s", secretName))
-		*secretWithCa = false
-	}
-
-	// Log updated secretWithCa
-	r.log.Info(fmt.Sprintf("Updated secretWithCa value: %v", *secretWithCa))
-
-	return nil
-}
-
-func (r *ControlPlaneReconciler) createRouterSecrets(ms *microservice, address string) (err error) {
+// createRouterSecrets creates the secrets for the router.
+// It generates the CA and secrets for the router.
+// It also appends the secrets to the microservice.secrets slice.
+func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *microservice, address string) (err error) {
 	r.log.Info(fmt.Sprintf("Creating routerSecrets definition for router reconcile for Controlplane %s", r.cp.Name))
 
 	defer func() {
@@ -488,26 +423,94 @@ func (r *ControlPlaneReconciler) createRouterSecrets(ms *microservice, address s
 			err = fmt.Errorf("createRouterSecrets failed: %v", recoverResult)
 		}
 	}()
-	// CA
 
-	r.log.Info(fmt.Sprintf("Generating CA Secret secrets for router reconcile for Controlplane %s", r.cp.Name))
+	const (
+		LocalClientSecret        string = "skupper-local-client"
+		LocalServerSecret        string = "pot-router-local-server"
+		LocalCaSecret            string = "default-router-local-ca"
+		SiteServerSecret         string = "pot-router-site-server"
+		SiteCaSecret             string = "pot-site-ca"
+		ConsoleServerSecret      string = "skupper-console-certs"
+		ConsoleUsersSecret       string = "skupper-console-users"
+		PrometheusServerSecret   string = "skupper-prometheus-certs"
+		OauthRouterConsoleSecret string = "skupper-router-console-certs"
+		ServiceCaSecret          string = "skupper-service-ca"
+		ServiceClientSecret      string = "skupper-service-client" // Secret that is used in sslProfiles for all http2 connectors with tls enabled
+	)
 
-	caName := "router-ca"
-	caSecret := certs.GenerateCASecret(caName, caName)
-	caSecret.ObjectMeta.Namespace = r.cp.ObjectMeta.Namespace
-	ms.secrets = append(ms.secrets, caSecret)
+	// Check if secrets already exist
+	existingSiteCA := &corev1.Secret{}
+	existingLocalCA := &corev1.Secret{}
+	existingSiteServer := &corev1.Secret{}
+	existingLocalServer := &corev1.Secret{}
+	siteSecretAddress := fmt.Sprintf("%s.%s.svc.cluster.local,%s", ms.name, namespace, address)
+	localSecretAddress := fmt.Sprintf("%s.%s.svc.cluster.local,%s", ms.name, namespace, address)
+	siteSecretSubject := fmt.Sprintf("pot-router")
+	localSecretSubject := fmt.Sprintf("pot-router-local")
 
-	// AMQPS and Internal
-	for _, suffix := range []string{"amqps", "internal"} {
-		r.log.Info(fmt.Sprintf("Generating %s Secret secrets for router reconcile for Controlplane %s", suffix, r.cp.Name))
-		secret := certs.GenerateSecret("router-"+suffix, address, address, &caSecret)
-		secret.ObjectMeta.Namespace = r.cp.ObjectMeta.Namespace
-		ms.secrets = append(ms.secrets, secret)
+	// Try to get existing secrets
+	err = r.Client.Get(context.Background(), types.NamespacedName{Name: SiteCaSecret, Namespace: namespace}, existingSiteCA)
+	siteCAExists := err == nil
+	err = r.Client.Get(context.Background(), types.NamespacedName{Name: LocalCaSecret, Namespace: namespace}, existingLocalCA)
+	localCAExists := err == nil
+	err = r.Client.Get(context.Background(), types.NamespacedName{Name: SiteServerSecret, Namespace: namespace}, existingSiteServer)
+	siteServerExists := err == nil
+	err = r.Client.Get(context.Background(), types.NamespacedName{Name: LocalServerSecret, Namespace: namespace}, existingLocalServer)
+	localServerExists := err == nil
+
+	// If all secrets exist, use them
+	if siteCAExists && localCAExists && siteServerExists && localServerExists {
+		r.log.Info(fmt.Sprintf("Using existing secrets for Controlplane %s", r.cp.Name))
+		ms.secrets = append(ms.secrets, *existingSiteServer, *existingLocalServer)
+		return nil
 	}
 
-	r.log.Info(fmt.Sprintf("Secrets generated for Controlplane %s", r.cp.Name))
+	// Generate new secrets if any are missing
+	r.log.Info(fmt.Sprintf("Generating new secrets for Controlplane %s", r.cp.Name))
 
-	return err
+	var siteCA, localCA corev1.Secret
+
+	// Generate CA certificates if they don't exist
+	if !siteCAExists {
+		r.log.Info(fmt.Sprintf("Generating site CA Secret for Controlplane %s", r.cp.Name))
+		siteCA = util.GenerateSecret(SiteCaSecret, SiteCaSecret, SiteCaSecret, 0, nil)
+		siteCA.Namespace = namespace
+		ms.secrets = append(ms.secrets, siteCA)
+	} else {
+		siteCA = *existingSiteCA
+	}
+
+	if !localCAExists {
+		r.log.Info(fmt.Sprintf("Generating local CA Secret for Controlplane %s", r.cp.Name))
+		localCA = util.GenerateSecret(LocalCaSecret, LocalCaSecret, LocalCaSecret, 0, nil)
+		localCA.Namespace = namespace
+		ms.secrets = append(ms.secrets, localCA)
+	} else {
+		localCA = *existingLocalCA
+	}
+
+	// Generate server certificates if they don't exist
+	if !siteServerExists {
+		r.log.Info(fmt.Sprintf("Generating site server certificate for Controlplane %s with address %s", r.cp.Name, address))
+		siteSecret := util.GenerateSecret(SiteServerSecret, siteSecretSubject, siteSecretAddress, 0, &siteCA)
+		siteSecret.Namespace = namespace
+		ms.secrets = append(ms.secrets, siteSecret)
+	} else {
+		ms.secrets = append(ms.secrets, *existingSiteServer)
+	}
+
+	if !localServerExists {
+		r.log.Info(fmt.Sprintf("Generating local server certificate for Controlplane %s with address %s", r.cp.Name, address))
+		localSecret := util.GenerateSecret(LocalServerSecret, localSecretSubject, localSecretAddress, 0, &localCA)
+		localSecret.Namespace = namespace
+		ms.secrets = append(ms.secrets, localSecret)
+	} else {
+		ms.secrets = append(ms.secrets, *existingLocalServer)
+	}
+
+	r.log.Info(fmt.Sprintf("Secrets generated/retrieved for Controlplane %s", r.cp.Name))
+
+	return nil
 }
 
 func newK8sClient() (*k8sclient.Client, error) {

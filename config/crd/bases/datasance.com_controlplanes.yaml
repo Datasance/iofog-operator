@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: controlplanes.datasance.com
 spec:
   group: datasance.com
@@ -85,28 +85,6 @@ spec:
                   secretName:
                     type: string
                 type: object
-              router:
-                description: Router contains runtime configuration for ioFog Router
-                properties:
-                  internalSecret:
-                    type: string
-                  amqpsSecret:
-                    type: string
-                  requireSsl:
-                    type: string
-                  saslMechanisms:
-                    type: string
-                  authenticatePeer:
-                    type: string
-                type: object
-              proxy:
-                description: Proxy contains runtime configuration for ioFog Proxy
-                properties:
-                  serverName:
-                    type: string
-                  transport:
-                    type: integer
-                type: object
               database:
                 description: Database for ioFog Controller
                 properties:
@@ -136,13 +114,11 @@ spec:
                 properties:
                   controller:
                     type: string
-                  portManager:
-                    type: string
-                  proxy:
-                    type: string
                   pullSecret:
                     type: string
                   router:
+                    type: string
+                  routerAdaptor:
                     type: string
                 type: object
               ingresses:
@@ -162,11 +138,6 @@ spec:
                       secretName:
                         type: string
                     type: object
-                  httpProxy:
-                    properties:
-                      address:
-                        type: string
-                    type: object
                   router:
                     properties:
                       address:
@@ -177,11 +148,6 @@ spec:
                         type: integer
                       messagePort:
                         type: integer
-                    type: object
-                  tcpProxy:
-                    properties:
-                      address:
-                        type: string
                     type: object
                 type: object
               replicas:
@@ -197,17 +163,6 @@ spec:
                   configured
                 properties:
                   controller:
-                    properties:
-                      address:
-                        type: string
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      type:
-                        type: string
-                    type: object
-                  proxy:
                     properties:
                       address:
                         type: string
