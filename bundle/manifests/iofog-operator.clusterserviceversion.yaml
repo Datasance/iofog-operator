@@ -55,7 +55,8 @@ metadata:
             "controller": {
               "ecnViewerUrl": "pot.demo.datasance.com",
               "https": true,
-              "secretName": "secretName"
+              "secretName": "secretName",
+              "logLevel": "debug"
             },
             "ingresses": {
               "controller": {
@@ -288,6 +289,11 @@ spec:
             path: controller.ecnViewerUrl
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:url
+          - description: Log level for the controller
+            displayName: Log Level
+            path: controller.logLevel
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:text
           - description: Specifies if HTTPS should be enabled for the controller's external
               endpoints
             displayName: Enable HTTPS

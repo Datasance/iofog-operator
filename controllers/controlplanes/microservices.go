@@ -48,6 +48,8 @@ const (
 	controllerDBPasswordSecretKey                  = "password"
 	controllerDBHostSecretKey                      = "host"
 	controllerDBPortSecretKey                      = "port"
+	controllerDBSSLSecretKey                       = "ssl"
+	controllerDBCACertSecretKey                    = "ca"
 )
 
 type service struct {
@@ -108,6 +110,7 @@ type controllerMicroserviceConfig struct {
 	pidBaseDir         string
 	ecnViewerPort      int
 	ecnViewerURL       string
+	logLevel           string
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -135,6 +138,10 @@ func filterControllerConfig(cfg *controllerMicroserviceConfig) {
 		cfg.scheme = "http"
 	} else {
 		cfg.scheme = "https"
+	}
+
+	if cfg.logLevel == "" {
+		cfg.logLevel = "info"
 	}
 
 }
@@ -211,6 +218,8 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					controllerDBPortSecretKey:     strconv.Itoa(cfg.db.Port),
 					controllerDBUserSecretKey:     cfg.db.User,
 					controllerDBPasswordSecretKey: cfg.db.Password,
+					controllerDBSSLSecretKey:      getSSLValue(cfg.db.SSL),
+					controllerDBCACertSecretKey:   getCAValue(cfg.db.CA),
 				},
 			},
 			{
@@ -393,6 +402,28 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						},
 					},
 					{
+						Name: "DB_USE_SSL",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controllerDBCredentialsSecretName,
+								},
+								Key: controllerDBSSLSecretKey,
+							},
+						},
+					},
+					{
+						Name: "DB_SSL_CA",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: controllerDBCredentialsSecretName,
+								},
+								Key: controllerDBCACertSecretKey,
+							},
+						},
+					},
+					{
 						Name:  "CONTROL_PLANE",
 						Value: "Kubernetes",
 					},
@@ -423,6 +454,10 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 					{
 						Name:  "VIEWER_URL",
 						Value: cfg.ecnViewerURL,
+					},
+					{
+						Name:  "LOG_LEVEL",
+						Value: cfg.logLevel,
 					},
 				},
 				// resources: corev1.ResourceRequirements{
@@ -826,6 +861,20 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 			},
 		},
 	}
+}
+
+func getSSLValue(ssl *bool) string {
+	if ssl == nil {
+		return "false"
+	}
+	return strconv.FormatBool(*ssl)
+}
+
+func getCAValue(ca *string) string {
+	if ca == nil {
+		return ""
+	}
+	return *ca
 }
 
 func getTrafficPolicy(serviceType string) string {

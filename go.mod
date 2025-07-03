@@ -3,7 +3,7 @@ module github.com/datasance/iofog-operator/v3
 go 1.23.0
 
 require (
-	github.com/datasance/iofog-go-sdk/v3 v3.5.0-alpha
+	github.com/datasance/iofog-go-sdk/v3 v3.5.0
 	github.com/go-logr/logr v1.4.2
 	k8s.io/api v0.32.0
 	k8s.io/apiextensions-apiserver v0.32.0

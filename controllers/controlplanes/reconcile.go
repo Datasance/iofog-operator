@@ -85,6 +85,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
 		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
 		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
+		logLevel:           r.cp.Spec.Controller.LogLevel,
 	}
 
 	ingressConfig := &controllerIngressConfig{

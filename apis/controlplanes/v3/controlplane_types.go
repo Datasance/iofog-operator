@@ -91,12 +91,14 @@ type Auth struct {
 }
 
 type Database struct {
-	Provider     string `json:"provider"`
-	Host         string `json:"host"`
-	Port         int    `json:"port"`
-	User         string `json:"user"`
-	Password     string `json:"password"`
-	DatabaseName string `json:"databaseName"`
+	Provider     string  `json:"provider"`
+	Host         string  `json:"host"`
+	Port         int     `json:"port"`
+	User         string  `json:"user"`
+	Password     string  `json:"password"`
+	DatabaseName string  `json:"databaseName"`
+	SSL          *bool   `json:"ssl,omitempty"`
+	CA           *string `json:"ca,omitempty"`
 }
 
 type User struct {
@@ -137,6 +139,7 @@ type Controller struct {
 	ECNName       string `json:"ecn,omitempty"`
 	Https         *bool  `json:"https,omitempty"`
 	SecretName    string `json:"secretName,omitempty"`
+	LogLevel      string `json:"logLevel,omitempty"`
 }
 
 // type Router struct {

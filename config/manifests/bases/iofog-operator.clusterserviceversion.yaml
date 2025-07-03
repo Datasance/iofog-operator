@@ -52,7 +52,8 @@ metadata:
               "ecnViewerPort": 0,
               "ecnViewerUrl": null,
               "https": null,
-              "secretName": null
+              "secretName": null,
+              "logLevel": "debug"
             },
             "ingresses": {
               "controller": {

@@ -2,9 +2,9 @@ OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
-LDFLAGS += -X $(PREFIX).routerAdaptorTag=v3.1.2
-LDFLAGS += -X $(PREFIX).routerTag=v3.3.0
-LDFLAGS += -X $(PREFIX).controllerTag=v3.4.10
+LDFLAGS += -X $(PREFIX).routerAdaptorTag=3.5.0
+LDFLAGS += -X $(PREFIX).routerTag=3.5.0
+LDFLAGS += -X $(PREFIX).controllerTag=3.5.0
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0

@@ -79,6 +79,8 @@ spec:
                     type: integer
                   ecnViewerUrl:
                     type: string
+                  logLevel:
+                    type: string
                   https:
                     type: boolean
                   pidBaseDir:
