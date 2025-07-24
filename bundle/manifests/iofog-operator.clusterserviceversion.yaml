@@ -35,18 +35,11 @@ metadata:
             "images": {
               "pullSecret": "pullsecret",
               "controller": "ghcr.io/datasance/controller@sha256:a9df302208e61cff20240365fd00ae319ebeadb79ca5f0fd831e3b4ebe55041b",
-              "portManager": "ghcr.io/datasance/port-manager@sha256:4bf3793e9e3cd10df9b46c459e983631393825ca788ffbbb3ec3659158ad61fe",
-              "proxy": "ghcr.io/datasance/proxy@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f",
+              "routerAdaptor": "ghcr.io/datasance/router-adaptor@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f",
               "router": "ghcr.io/datasance/router@sha256:82657fc8f39d33d8ef0161cf27d705cbdc0a97dca07b22a5fe78fd4213ef0d31"
             },
             "services": {
               "controller": {
-                "type": "LoadBalancer",
-                "annotations": {
-                  "service.beta.kubernetes.io/azure-load-balancer-internal": "false"
-                }
-              },
-              "proxy": {
                 "type": "LoadBalancer",
                 "annotations": {
                   "service.beta.kubernetes.io/azure-load-balancer-internal": "false"
@@ -62,7 +55,8 @@ metadata:
             "controller": {
               "ecnViewerUrl": "pot.demo.datasance.com",
               "https": true,
-              "secretName": "secretName"
+              "secretName": "secretName",
+              "logLevel": "debug"
             },
             "ingresses": {
               "controller": {
@@ -75,15 +69,9 @@ metadata:
               },
               "router": {
                 "address": "pot.demo.datasance.com",
-                "messagePort": 5672,
-                "interiorPort": 55672,
-                "edgePort": 45672
-              },
-              "httpProxy": {
-                "address": "pot.demo.datasance.com"
-              },
-              "tcpProxy": {
-                "address": "pot.demo.datasance.com"
+                "messagePort": 5671,
+                "interiorPort": 55671,
+                "edgePort": 45671
               }
             }
           },
@@ -229,14 +217,9 @@ spec:
             path: images.controller
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:text
-          - description: Image for the Port Manager component
-            displayName: Port Manager Image
-            path: images.portManager
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:text
-          - description: Image for the Proxy component
-            displayName: Proxy Image
-            path: images.proxy
+          - description: Image for the RouterAdaptor component
+            displayName: RouterAdaptor Image
+            path: images.routerAdaptor
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:text
           - description: Image for the Router component
@@ -264,23 +247,6 @@ spec:
               balancer configuration)
             displayName: Controller Service Annotations
             path: services.controller.annotations
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:text
-          - description: Service configuration for the proxy component
-            displayName: Proxy Service
-            path: services.proxy
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:fieldGroup:ProxyService
-          - description: The service type for the proxy component (e.g., ClusterIP,
-              NodePort, LoadBalancer)
-            displayName: Proxy Service Type
-            path: services.proxy.type
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:selector:core:v1:ServiceType
-          - description: Annotations for the proxy service (e.g., for load balancer or
-              ingress settings)
-            displayName: Proxy Service Annotations
-            path: services.proxy.annotations
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:text
           - description: Service configuration for the router component
@@ -323,6 +289,11 @@ spec:
             path: controller.ecnViewerUrl
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:url
+          - description: Log level for the controller
+            displayName: Log Level
+            path: controller.logLevel
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:text
           - description: Specifies if HTTPS should be enabled for the controller's external
               endpoints
             displayName: Enable HTTPS
@@ -393,26 +364,6 @@ spec:
             path: ingresses.router.edgePort
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:number
-          - description: Ingress configuration for HTTP Proxy access
-            displayName: HTTP Proxy Ingress
-            path: ingresses.httpProxy
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:fieldGroup:HTTP Proxy Ingress
-          - description: Address for accessing the HTTP Proxy ingress
-            displayName: HTTP Proxy Address
-            path: ingresses.httpProxy.address
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:text
-          - description: Ingress configuration for TCP Proxy access
-            displayName: TCP Proxy Ingress
-            path: ingresses.tcpProxy
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:fieldGroup:TCP Proxy Ingress
-          - description: Address for accessing the TCP Proxy ingress
-            displayName: TCP Proxy Address
-            path: ingresses.tcpProxy.address
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:text
   description: ioFog Control Plane on Kubernetes
   displayName: iofog-operator
   icon:
@@ -573,8 +524,6 @@ spec:
       image: ghcr.io/datasance/controller@sha256:a9df302208e61cff20240365fd00ae319ebeadb79ca5f0fd831e3b4ebe55041b
     - name: router
       image: ghcr.io/datasance/router@sha256:82657fc8f39d33d8ef0161cf27d705cbdc0a97dca07b22a5fe78fd4213ef0d31
-    - name: proxy
-      image: ghcr.io/datasance/proxy@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f 
-    - name: port-manager
-      image: ghcr.io/datasance/port-manager@sha256:4bf3793e9e3cd10df9b46c459e983631393825ca788ffbbb3ec3659158ad61fe 
+    - name: routerAdaptor
+      image: ghcr.io/datasance/router-adaptor@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f 
   version: 3.4.13

@@ -17,25 +17,23 @@ import "fmt"
 
 // These values are set by the linker, e.g. "LDFLAGS += -X $(PREFIX).controllerTag=v3.0.0-beta1".
 var (
-	repo           = "undefined" //nolint:gochecknoglobals
-	controllerTag  = "undefined" //nolint:gochecknoglobals
-	routerTag      = "undefined" //nolint:gochecknoglobals
-	portManagerTag = "undefined" //nolint:gochecknoglobals
-	proxyTag       = "undefined" //nolint:gochecknoglobals
+	repo             = "undefined" //nolint:gochecknoglobals
+	controllerTag    = "undefined" //nolint:gochecknoglobals
+	routerTag        = "undefined" //nolint:gochecknoglobals
+	routerAdaptorTag = "undefined" //nolint:gochecknoglobals
 )
 
 const (
-	controllerImage  = "controller"
-	portManagerImage = "port-manager"
-	proxyImage       = "proxy"
-	routerImage      = "router"
+	controllerImage    = "controller"
+	routerImage        = "router"
+	routerAdaptorImage = "router-adaptor"
 )
 
 func GetControllerImage() string {
 	return fmt.Sprintf("%s/%s:%s", repo, controllerImage, controllerTag)
 }
 func GetRouterImage() string { return fmt.Sprintf("%s/%s:%s", repo, routerImage, routerTag) }
-func GetPortManagerImage() string {
-	return fmt.Sprintf("%s/%s:%s", repo, portManagerImage, portManagerTag)
+
+func GetRouterAdaptorImage() string {
+	return fmt.Sprintf("%s/%s:%s", repo, routerAdaptorImage, routerAdaptorTag)
 }
-func GetProxyImage() string { return fmt.Sprintf("%s/%s:%s", repo, proxyImage, proxyTag) }

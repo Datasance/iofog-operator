@@ -3,11 +3,8 @@ module github.com/datasance/iofog-operator/v3
 go 1.23.0
 
 require (
-	github.com/datasance/iofog-go-sdk/v3 v3.4.17
+	github.com/datasance/iofog-go-sdk/v3 v3.5.0
 	github.com/go-logr/logr v1.4.2
-	github.com/go-sql-driver/mysql v1.8.0
-	github.com/lib/pq v1.10.9
-	github.com/skupperproject/skupper v0.0.0-20241029160621-0258f904174e
 	k8s.io/api v0.32.0
 	k8s.io/apiextensions-apiserver v0.32.0
 	k8s.io/apimachinery v0.32.0
@@ -17,7 +14,6 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

@@ -79,6 +79,8 @@ spec:
                     type: integer
                   ecnViewerUrl:
                     type: string
+                  logLevel:
+                    type: string
                   https:
                     type: boolean
                   pidBaseDir:
@@ -115,9 +117,7 @@ spec:
                 properties:
                   controller:
                     type: string
-                  portManager:
-                    type: string
-                  proxy:
+                  routerAdaptor:
                     type: string
                   pullSecret:
                     type: string
@@ -141,11 +141,6 @@ spec:
                       secretName:
                         type: string
                     type: object
-                  httpProxy:
-                    properties:
-                      address:
-                        type: string
-                    type: object
                   router:
                     properties:
                       address:
@@ -156,11 +151,6 @@ spec:
                         type: integer
                       messagePort:
                         type: integer
-                    type: object
-                  tcpProxy:
-                    properties:
-                      address:
-                        type: string
                     type: object
                 type: object
               replicas:
@@ -176,17 +166,6 @@ spec:
                   configured
                 properties:
                   controller:
-                    properties:
-                      address:
-                        type: string
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      type:
-                        type: string
-                    type: object
-                  proxy:
                     properties:
                       address:
                         type: string
