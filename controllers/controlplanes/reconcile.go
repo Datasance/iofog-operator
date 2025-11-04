@@ -13,6 +13,7 @@ import (
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
+	openidutil "github.com/datasance/iofog-operator/v3/internal/util"
 	util "github.com/datasance/iofog-operator/v3/internal/util/certs"
 
 	// "github.com/skupperproject/skupper/pkg/certs"
@@ -228,6 +229,8 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	// Wait for Controller LB to actually work
 	r.log.Info(fmt.Sprintf("Waiting for IP/LB Service in iofog-controller reconcile for ControlPlane %s", r.cp.Name))
 
+	var viewerEndpoint string
+
 	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeLoadBalancer)) {
 		//nolint:contextcheck // k8sClient unfortunately does not accept context
 		host, err := k8sClient.WaitForLoadBalancer(r.cp.Namespace, controllerName, loadBalancerTimeout)
@@ -240,6 +243,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 
 			return fin
 		}
+		viewerEndpoint = fmt.Sprintf("%s://%s", scheme, host)
 	}
 
 	if strings.EqualFold(r.cp.Spec.Services.Controller.Type, string(corev1.ServiceTypeClusterIP)) {
@@ -254,6 +258,10 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		if len(ingress.Status.LoadBalancer.Ingress) == 0 {
 			return op.ReconcileWithError(fmt.Errorf("no LoadBalancer ingress found for Ingress resource"))
 		}
+
+		if r.cp.Spec.Ingresses.Controller.Host != "" {
+			viewerEndpoint = fmt.Sprintf("%s://%s", scheme, r.cp.Spec.Ingresses.Controller.Host)
+		}
 	}
 
 	if shouldRestartPods {
@@ -261,6 +269,15 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 
 		if err := r.restartPodsForDeployment(ctx, ms.name, r.cp.Namespace); err != nil {
 			return op.ReconcileWithError(err)
+		}
+	}
+
+	// Update ECN Viewer Client Root URL
+	if viewerEndpoint != "" {
+		r.log.Info(fmt.Sprintf("Updating ECN Viewer Client Root URL for ControlPlane %s to %s", r.cp.Name, viewerEndpoint))
+		if err := openidutil.UpdateECNViewerClientRootURL(r.cp.Spec.Auth, viewerEndpoint); err != nil {
+			r.log.Info(fmt.Sprintf("Failed to update ECN Viewer Client Root URL for ControlPlane %s: %s", r.cp.Name, err.Error()))
+			// Continue even if update fails, as it's not critical for the reconcile process
 		}
 	}
 
@@ -310,26 +327,34 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	// Configure
 	volumeMountPath := "/etc/skupper-router-certs"
 
-	ms := newRouterMicroservice(routerMicroserviceConfig{
+	// Check if HA is enabled (default to false if not specified)
+	haEnabled := false
+	// if r.cp.Spec.Router.HA != nil {
+	// 	haEnabled = *r.cp.Spec.Router.HA
+	// }
+
+	routerMicroservices := newRouterMicroservices(routerMicroserviceConfig{
 		image:              r.cp.Spec.Images.Router,
 		adaptorImage:       r.cp.Spec.Images.RouterAdaptor,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		serviceType:        r.cp.Spec.Services.Router.Type,
 		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
 		volumeMountPath:    volumeMountPath,
+		ha:                 haEnabled,
 	})
 
-	// Service Account
+	// Use the primary router for service creation and IP resolution
+	ms := routerMicroservices[0]
+
+	// Service Account, Role, and Role Binding (only for primary router)
 	if err := r.createServiceAccount(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
 	}
 
-	// Role
 	if err := r.createRole(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
 	}
 
-	// Role binding
 	if err := r.createRoleBinding(ctx, ms); err != nil {
 		return op.ReconcileWithError(err)
 	}
@@ -387,13 +412,14 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 		return op.ReconcileWithError(err)
 	}
 
-	// Deployment
-	r.log.Info(fmt.Sprintf("Creating deployment for router reconcile for Controlplane %s", r.cp.Name))
+	// Deployments
+	r.log.Info(fmt.Sprintf("Creating deployments for router reconcile for Controlplane %s", r.cp.Name))
 
-	if err := r.createDeployment(ctx, ms); err != nil {
-		r.log.Info(fmt.Sprintf("Failed to create deployment %v for router reconcile for Controlplane %s", err, r.cp.Name))
-
-		return op.ReconcileWithError(err)
+	for _, routerMS := range routerMicroservices {
+		if err := r.createDeployment(ctx, routerMS); err != nil {
+			r.log.Info(fmt.Sprintf("Failed to create deployment %v for router reconcile for Controlplane %s", err, r.cp.Name))
+			return op.ReconcileWithError(err)
+		}
 	}
 
 	r.log.Info(fmt.Sprintf("op.Continue for router reconcile for Controlplane %s", r.cp.Name))
