@@ -143,11 +143,7 @@ type Controller struct {
 }
 
 // type Router struct {
-// 	InternalSecret   string `json:"internalSecret,omitempty"`
-// 	AmqpsSecret      string `json:"amqpsSecret,omitempty"`
-// 	RequireSsl       string `json:"requireSsl,omitempty"`
-// 	SaslMechanisms   string `json:"saslMechanisms,omitempty"`
-// 	AuthenticatePeer string `json:"authenticatePeer,omitempty"`
+// 	HA *bool `json:"ha,omitempty"`
 // }
 
 // ControlPlaneStatus defines the observed state of ControlPlane.

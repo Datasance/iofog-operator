@@ -546,6 +546,7 @@ type routerMicroserviceConfig struct {
 	localCA            string
 	siteSecret         string
 	localSecret        string
+	ha                 bool
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -795,6 +796,235 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 								FieldPath: "status.podIP",
 							},
 						},
+					},
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "pot-router-certs",
+						MountPath: cfg.volumeMountPath,
+					},
+				},
+			},
+			{
+				name:            "router-adaptor",
+				image:           cfg.adaptorImage,
+				imagePullPolicy: "Always",
+				env: []corev1.EnvVar{
+					{
+						Name: "SKUPPER_NAMESPACE",
+						ValueFrom: &corev1.EnvVarSource{
+							FieldRef: &corev1.ObjectFieldSelector{
+								FieldPath: "metadata.namespace",
+							},
+						},
+					},
+					{
+						Name: "SKUPPER_NAME",
+						ValueFrom: &corev1.EnvVarSource{
+							FieldRef: &corev1.ObjectFieldSelector{
+								FieldPath: "metadata.namespace",
+							},
+						},
+					},
+					{
+						Name:  "SKUPPER_SITE_ID",
+						Value: "default-router",
+					},
+					{
+						Name:  "SKUPPER_ROUTER_CONFIG",
+						Value: "pot-router",
+					},
+					{
+						Name:  "SKUPPER_ROUTER_DEPLOYMENT",
+						Value: "router",
+					},
+				},
+				readinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Port:   intstr.FromInt(9191),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
+						},
+					},
+					InitialDelaySeconds: 1,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "pot-router-certs",
+						MountPath: "/etc/skupper-router-certs",
+					},
+				},
+			},
+		},
+	}
+}
+
+// newRouterMicroservices creates router microservices based on HA configuration
+func newRouterMicroservices(cfg routerMicroserviceConfig) []*microservice {
+	cfg = filterRouterConfig(cfg)
+
+	var microservices []*microservice
+
+	// Always create the primary router
+	primaryRouter := newRouterMicroservice(cfg)
+	microservices = append(microservices, primaryRouter)
+
+	// Create secondary router if HA is enabled
+	if cfg.ha {
+		secondaryRouter := newRouterMicroserviceWithName(cfg, "router-2")
+		microservices = append(microservices, secondaryRouter)
+	}
+
+	return microservices
+}
+
+// newRouterMicroserviceWithName creates a router microservice with a custom name
+func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *microservice {
+	cfg = filterRouterConfig(cfg)
+
+	return &microservice{
+		name: name,
+		labels: map[string]string{
+			"datasance.com/component": routerName,
+			"application":             "interior-router",
+			"skupper.io/component":    "router",
+			"skupper.io/type":         "site",
+		},
+		annotations: map[string]string{
+			"prometheus.io/port":   "9090",
+			"prometheus.io/scrape": "true",
+		},
+		services:        []service{}, // Secondary router doesn't create its own service
+		imagePullSecret: cfg.imagePullSecret,
+		replicas:        1,
+		rbacRules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{""},
+				Resources: []string{"pods", "services", "endpoints"},
+			},
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{"apps"},
+				Resources: []string{"deployments"},
+			},
+		},
+		volumes: []corev1.Volume{
+			{
+				Name: "pot-router-certs",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "pot-router-certs",
+					},
+				},
+			},
+		},
+		initContainers: []container{
+			{
+				name:            "router-config-init",
+				image:           cfg.adaptorImage,
+				imagePullPolicy: "Always",
+				env: []corev1.EnvVar{
+					{
+						Name:  "SKUPPER_ROUTER_CONFIG",
+						Value: "pot-router",
+					},
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "pot-router-certs",
+						MountPath: "/etc/skupper-router-certs",
+					},
+				},
+			},
+		},
+		containers: []container{
+			{
+				name:            routerName,
+				image:           cfg.image,
+				imagePullPolicy: "Always",
+				command: []string{
+					"/home/skrouterd/bin/launch.sh",
+				},
+				ports: []corev1.ContainerPort{
+					{
+						Name:          "amqps",
+						ContainerPort: 5671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "http",
+						ContainerPort: 9090,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "inter-router",
+						ContainerPort: 55671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+					{
+						Name:          "edge",
+						ContainerPort: 45671,
+						Protocol:      corev1.ProtocolTCP,
+					},
+				},
+				readinessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Port:   intstr.FromInt(9090),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
+						},
+					},
+					InitialDelaySeconds: 1,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				livenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Port:   intstr.FromInt(9090),
+							Path:   "/healthz",
+							Scheme: corev1.URISchemeHTTP,
+						},
+					},
+					InitialDelaySeconds: 60,
+					TimeoutSeconds:      1,
+					PeriodSeconds:       10,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				env: []corev1.EnvVar{
+					{
+						Name:  "APPLICATION_NAME",
+						Value: routerName,
+					},
+					{
+						Name:  "QDROUTERD_AUTO_MESH_DISCOVERY",
+						Value: "QUERY",
+					},
+					{
+						Name:  "QDROUTERD_CONF",
+						Value: "/etc/skupper-router-certs/skrouterd.json",
+					},
+					{
+						Name:  "QDROUTERD_CONF_TYPE",
+						Value: "json",
+					},
+					{
+						Name:  "SKUPPER_SITE_ID",
+						Value: "default-router",
+					},
+					{
+						Name:  "SKUPPER_SITE_NAME",
+						Value: "default-router",
 					},
 				},
 				volumeMounts: []corev1.VolumeMount{

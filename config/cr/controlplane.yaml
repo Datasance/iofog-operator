@@ -43,6 +43,8 @@ spec:
     https: # true or false  ..default is false
     secretName: #name of secret it has to be same with the one that defined in the controller ingress struct
     logLevel:
+  # router:
+  #   ha: # true or false ..default is false. When true, creates a second router deployment (router-2) for high availability
   ingresses:
     controller:
       annotations:
