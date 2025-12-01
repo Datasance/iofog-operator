@@ -29,6 +29,15 @@ const (
 	errParseControllerURL = "failed to parse Controller endpoint as URL (%s): %s"
 )
 
+// getEventsIfConfigured returns a pointer to Events if it's configured (at least one field is set), otherwise nil
+func getEventsIfConfigured(events cpv3.Events) *cpv3.Events {
+	// Check if at least one field is configured
+	if events.AuditEnabled != nil || events.CaptureIpAddress != nil || events.RetentionDays != 0 || events.CleanupInterval != 0 {
+		return &events
+	}
+	return nil
+}
+
 func reconcileRoutine(ctx context.Context, recon func(context.Context) op.Reconciliation, reconChan chan op.Reconciliation) {
 	reconChan <- recon(ctx)
 }
@@ -87,6 +96,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
 		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
 		logLevel:           r.cp.Spec.Controller.LogLevel,
+		events:             getEventsIfConfigured(r.cp.Spec.Events),
 	}
 
 	ingressConfig := &controllerIngressConfig{

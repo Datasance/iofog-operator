@@ -104,6 +104,7 @@ type controllerMicroserviceConfig struct {
 	loadBalancerAddr   string
 	auth               *cpv3.Auth
 	db                 *cpv3.Database
+	events             *cpv3.Events
 	routerAdaptorImage string
 	routerImage        string
 	ecn                string
@@ -530,6 +531,39 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 			Value: "/etc/pot/controller-cert/ca.crt",
 		})
 
+	}
+
+	// Add Events environment variables only if events were explicitly configured
+	if cfg.events != nil && cfg.events.AuditEnabled != nil {
+		// Always set EVENT_AUDIT_ENABLED (true or false)
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "EVENT_AUDIT_ENABLED",
+			Value: strconv.FormatBool(*cfg.events.AuditEnabled),
+		})
+
+		// Set optional fields only if audit is enabled
+		if *cfg.events.AuditEnabled {
+			if cfg.events.RetentionDays != 0 {
+				msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+					Name:  "EVENT_RETENTION_DAYS",
+					Value: strconv.Itoa(cfg.events.RetentionDays),
+				})
+			}
+			if cfg.events.CleanupInterval != 0 {
+				msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+					Name:  "EVENT_CLEANUP_INTERVAL",
+					Value: strconv.Itoa(cfg.events.CleanupInterval),
+				})
+			}
+		}
+
+		// Set EVENT_CAPTURE_IP_ADDRESS if explicitly configured
+		if cfg.events.CaptureIpAddress != nil {
+			msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+				Name:  "EVENT_CAPTURE_IP_ADDRESS",
+				Value: strconv.FormatBool(*cfg.events.CaptureIpAddress),
+			})
+		}
 	}
 
 	return msvc

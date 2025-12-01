@@ -56,6 +56,8 @@ type ControlPlaneSpec struct {
 	Controller Controller `json:"controller,omitempty"`
 	// // Router contains runtime configuration for ioFog Router
 	// Router Router `json:"router,omitempty"`
+	// Events contains runtime configuration for ioFog Controller events
+	Events Events `json:"events,omitempty"`
 }
 
 type Replicas struct {
@@ -88,6 +90,13 @@ type Auth struct {
 	ControllerClient string `json:"controllerClient"`
 	ControllerSecret string `json:"controllerSecret"`
 	ViewerClient     string `json:"viewerClient"`
+}
+
+type Events struct {
+	AuditEnabled     *bool `json:"auditEnabled,omitempty"`
+	RetentionDays    int   `json:"retentionDays,omitempty"`
+	CleanupInterval  int   `json:"cleanupInterval,omitempty"`
+	CaptureIpAddress *bool `json:"captureIpAddress,omitempty"`
 }
 
 type Database struct {
