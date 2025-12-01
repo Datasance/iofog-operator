@@ -4,7 +4,7 @@ VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).routerAdaptorTag=3.5.2
 LDFLAGS += -X $(PREFIX).routerTag=3.5.2
-LDFLAGS += -X $(PREFIX).controllerTag=3.5.7
+LDFLAGS += -X $(PREFIX).controllerTag=3.5.10
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0

@@ -21,7 +21,12 @@ spec:
     ssl: 
     controllerClient: 
     controllerSecret: 
-    viewerClient: 
+    viewerClient:
+  events:
+    auditEnabled:
+    retentionDays:
+    cleanupInterval:
+    captureIpAddress:
   images:
     pullSecret: 
     controller:
