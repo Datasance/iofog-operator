@@ -76,10 +76,9 @@ type Service struct {
 }
 
 type Images struct {
-	PullSecret    string `json:"pullSecret,omitempty"`
-	Controller    string `json:"controller,omitempty"`
-	Router        string `json:"router,omitempty"`
-	RouterAdaptor string `json:"routerAdaptor,omitempty"`
+	PullSecret string `json:"pullSecret,omitempty"`
+	Controller string `json:"controller,omitempty"`
+	Router     string `json:"router,omitempty"`
 }
 
 type Auth struct {

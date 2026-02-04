@@ -117,8 +117,6 @@ spec:
                 properties:
                   controller:
                     type: string
-                  routerAdaptor:
-                    type: string
                   pullSecret:
                     type: string
                   router:

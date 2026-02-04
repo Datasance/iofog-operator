@@ -34,7 +34,6 @@ metadata:
             "images": {
               "pullSecret": null,
               "controller": null,
-              "routerAdaptor": null,
               "router": null
             },
             "services": {

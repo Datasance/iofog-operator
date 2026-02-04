@@ -3,7 +3,7 @@ module github.com/datasance/iofog-operator/v3
 go 1.23.0
 
 require (
-	github.com/datasance/iofog-go-sdk/v3 v3.5.2
+	github.com/datasance/iofog-go-sdk/v3 v3.6.0
 	github.com/go-logr/logr v1.4.2
 	golang.org/x/oauth2 v0.23.0
 	k8s.io/api v0.32.0
@@ -66,6 +66,7 @@ require (
 )
 
 retract (
+	v3.5.3 // Published accidentally.
 	v3.4.15 // retract as db migration scripts fixed.
 	v3.4.14 // retract as db migration scripts fixed.
 	v3.4.5 // Published accidentally.
@@ -84,5 +85,4 @@ retract (
 	v3.2.3 // Published accidentally.
 	v3.2.2 // Published accidentally.
 	v3.2.1 // Published accidentally.
-	v3.5.3 // Published accidentally.
 )

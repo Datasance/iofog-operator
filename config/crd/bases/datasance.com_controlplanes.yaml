@@ -78,10 +78,10 @@ spec:
                     type: integer
                   ecnViewerUrl:
                     type: string
-                  logLevel:
-                    type: string
                   https:
                     type: boolean
+                  logLevel:
+                    type: string
                   pidBaseDir:
                     type: string
                   secretName:
@@ -90,6 +90,8 @@ spec:
               database:
                 description: Database for ioFog Controller
                 properties:
+                  ca:
+                    type: string
                   databaseName:
                     type: string
                   host:
@@ -100,6 +102,8 @@ spec:
                     type: integer
                   provider:
                     type: string
+                  ssl:
+                    type: boolean
                   user:
                     type: string
                 required:
@@ -110,6 +114,21 @@ spec:
                 - provider
                 - user
                 type: object
+              events:
+                description: |-
+                  // Router contains runtime configuration for ioFog Router
+                  Router Router `json:"router,omitempty"`
+                  Events contains runtime configuration for ioFog Controller events
+                properties:
+                  auditEnabled:
+                    type: boolean
+                  captureIpAddress:
+                    type: boolean
+                  cleanupInterval:
+                    type: integer
+                  retentionDays:
+                    type: integer
+                type: object
               images:
                 description: Images specifies which containers to run for each component
                   of the ControlPlane
@@ -119,8 +138,6 @@ spec:
                   pullSecret:
                     type: string
                   router:
-                    type: string
-                  routerAdaptor:
                     type: string
                 type: object
               ingresses:
@@ -274,9 +291,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

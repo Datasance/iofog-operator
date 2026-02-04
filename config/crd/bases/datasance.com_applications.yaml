@@ -76,6 +76,14 @@ spec:
                               type: integer
                             dockerUrl:
                               type: string
+                            edgeGuardFrequency:
+                              type: number
+                            gpsDevice:
+                              type: string
+                            gpsMode:
+                              type: string
+                            gpsScanFrequency:
+                              type: number
                             logDirectory:
                               type: string
                             logFileCount:
@@ -132,6 +140,8 @@ spec:
                           items:
                             type: string
                           type: array
+                        cpuSetCpus:
+                          type: string
                         env:
                           items:
                             properties:
@@ -158,6 +168,42 @@ spec:
                                 type: string
                             type: object
                           type: array
+                        healthCheck:
+                          description: MicroserviceHealthCheck contains information
+                            about the health check of a microservice
+                          properties:
+                            interval:
+                              format: int64
+                              type: integer
+                            retries:
+                              type: integer
+                            startInterval:
+                              format: int64
+                              type: integer
+                            startPeriod:
+                              format: int64
+                              type: integer
+                            test:
+                              items:
+                                type: string
+                              type: array
+                            timeout:
+                              format: int64
+                              type: integer
+                          required:
+                          - test
+                          type: object
+                        hostNetworkMode:
+                          type: boolean
+                        ipcMode:
+                          type: string
+                        isPrivileged:
+                          type: boolean
+                        memoryLimit:
+                          format: int64
+                          type: integer
+                        pidMode:
+                          type: string
                         platform:
                           type: string
                         ports:
@@ -176,8 +222,6 @@ spec:
                             - internal
                             type: object
                           type: array
-                        rootHostAccess:
-                          type: boolean
                         runAsUser:
                           type: string
                         runtime:
@@ -200,11 +244,24 @@ spec:
                             type: object
                           type: array
                       required:
+                      - hostNetworkMode
+                      - isPrivileged
                       - ports
-                      - rootHostAccess
                       type: object
                     created:
                       type: string
+                    execStatus:
+                      description: MicroserviceExecStatusInfo contains information
+                        about the exec status of a microservice
+                      properties:
+                        execSessionId:
+                          type: string
+                        status:
+                          type: string
+                      required:
+                      - execSessionId
+                      - status
+                      type: object
                     flow:
                       type: string
                     images:
@@ -240,12 +297,58 @@ spec:
                       type: string
                     rebuild:
                       type: boolean
+                    schedule:
+                      type: integer
+                    status:
+                      description: MicroserviceStatusInfo contains information about
+                        the status of a microservice
+                      properties:
+                        containerId:
+                          type: string
+                        cpuUsage:
+                          type: number
+                        errorMessage:
+                          type: string
+                        execSessionIds:
+                          items:
+                            type: string
+                          type: array
+                        healthStatus:
+                          type: string
+                        ipAddress:
+                          type: string
+                        memoryUsage:
+                          type: number
+                        operatingDuration:
+                          format: int64
+                          type: integer
+                        percentage:
+                          type: number
+                        startTime:
+                          format: int64
+                          type: integer
+                        status:
+                          type: string
+                      required:
+                      - containerId
+                      - cpuUsage
+                      - errorMessage
+                      - execSessionIds
+                      - healthStatus
+                      - ipAddress
+                      - memoryUsage
+                      - operatingDuration
+                      - percentage
+                      - startTime
+                      - status
+                      type: object
                     uuid:
                       type: string
                   required:
                   - agent
                   - config
                   - name
+                  - schedule
                   - uuid
                   type: object
                 type: array
