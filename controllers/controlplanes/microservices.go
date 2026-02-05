@@ -93,6 +93,7 @@ type container struct {
 }
 
 type controllerMicroserviceConfig struct {
+	controllerName     string
 	replicas           int32
 	image              string
 	imagePullSecret    string
@@ -105,7 +106,6 @@ type controllerMicroserviceConfig struct {
 	auth               *cpv3.Auth
 	db                 *cpv3.Database
 	events             *cpv3.Events
-	routerAdaptorImage string
 	routerImage        string
 	ecn                string
 	pidBaseDir         string
@@ -429,6 +429,10 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						Value: "Kubernetes",
 					},
 					{
+						Name:  "CONTROLLER_NAME",
+						Value: cfg.controllerName,
+					},
+					{
 						Name:  "CONTROLLER_NAMESPACE",
 						Value: namespace,
 					},
@@ -571,11 +575,9 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 
 type routerMicroserviceConfig struct {
 	image              string
-	adaptorImage       string
 	imagePullSecret    string
 	serviceType        string
 	serviceAnnotations map[string]string
-	volumeMountPath    string
 	siteCA             string
 	localCA            string
 	siteSecret         string
@@ -586,10 +588,6 @@ type routerMicroserviceConfig struct {
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
 	if cfg.image == "" {
 		cfg.image = util.GetRouterImage()
-	}
-
-	if cfg.adaptorImage == "" {
-		cfg.adaptorImage = util.GetRouterAdaptorImage()
 	}
 
 	if cfg.serviceType == "" {
@@ -680,7 +678,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				Resources: []string{"pods"},
 			},
 			{
-				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+				Verbs:     []string{"get", "list", "watch"},
 				APIGroups: []string{""},
 				Resources: []string{"configmaps"},
 			},
@@ -707,31 +705,29 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 		},
 		volumes: []corev1.Volume{
 			{
-				Name: "pot-router-certs",
+				Name: "pot-router-config",
 				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			},
-		},
-		initContainers: []container{
-			{
-				name:            "router-config-init",
-				image:           cfg.adaptorImage,
-				imagePullPolicy: "Always",
-				command: []string{
-					"/app/kube-adaptor",
-					"-init",
-				},
-				env: []corev1.EnvVar{
-					{
-						Name:  "SKUPPER_ROUTER_CONFIG",
-						Value: "pot-router",
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "pot-router"},
+						Items: []corev1.KeyToPath{
+							{Key: "skrouterd.json", Path: "skrouterd.json"},
+						},
 					},
 				},
-				volumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "pot-router-certs",
-						MountPath: "/etc/skupper-router-certs",
+			},
+			{
+				Name: "pot-router-site-server",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "pot-router-site-server",
+					},
+				},
+			},
+			{
+				Name: "pot-router-local-server",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "pot-router-local-server",
 					},
 				},
 			},
@@ -742,7 +738,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				image:           cfg.image,
 				imagePullPolicy: "Always",
 				command: []string{
-					"/home/skrouterd/bin/launch.sh",
+					"/home/skrouterd/bin/router",
 				},
 				ports: []corev1.ContainerPort{
 					{
@@ -805,15 +801,23 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 					},
 					{
 						Name:  "QDROUTERD_CONF",
-						Value: "/etc/skupper-router-certs/skrouterd.json",
+						Value: "/tmp/skrouterd.json",
 					},
 					{
 						Name:  "QDROUTERD_CONF_TYPE",
 						Value: "json",
 					},
 					{
+						Name:  "SSL_PROFILE_PATH",
+						Value: "/etc/skupper-router-certs",
+					},
+					{
 						Name:  "SKUPPER_SITE_ID",
 						Value: "default-router",
+					},
+					{
+						Name:  "SKUPPER_PLATFORM",
+						Value: "kubernetes",
 					},
 					{
 						Name: "POD_NAMESPACE",
@@ -834,63 +838,16 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{
-						Name:      "pot-router-certs",
-						MountPath: cfg.volumeMountPath,
-					},
-				},
-			},
-			{
-				name:            "router-adaptor",
-				image:           cfg.adaptorImage,
-				imagePullPolicy: "Always",
-				env: []corev1.EnvVar{
-					{
-						Name: "SKUPPER_NAMESPACE",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.namespace",
-							},
-						},
+						Name:      "pot-router-config",
+						MountPath: "/tmp",
 					},
 					{
-						Name: "SKUPPER_NAME",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.namespace",
-							},
-						},
+						Name:      "pot-router-site-server",
+						MountPath: "/etc/skupper-router-certs/pot-router-site-server",
 					},
 					{
-						Name:  "SKUPPER_SITE_ID",
-						Value: "default-router",
-					},
-					{
-						Name:  "SKUPPER_ROUTER_CONFIG",
-						Value: "pot-router",
-					},
-					{
-						Name:  "SKUPPER_ROUTER_DEPLOYMENT",
-						Value: "router",
-					},
-				},
-				readinessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Port:   intstr.FromInt(9191),
-							Path:   "/healthz",
-							Scheme: corev1.URISchemeHTTP,
-						},
-					},
-					InitialDelaySeconds: 1,
-					TimeoutSeconds:      1,
-					PeriodSeconds:       10,
-					FailureThreshold:    3,
-					SuccessThreshold:    1,
-				},
-				volumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "pot-router-certs",
-						MountPath: "/etc/skupper-router-certs",
+						Name:      "pot-router-local-server",
+						MountPath: "/etc/skupper-router-certs/pot-router-local-server",
 					},
 				},
 			},
@@ -950,29 +907,29 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 		},
 		volumes: []corev1.Volume{
 			{
-				Name: "pot-router-certs",
+				Name: "pot-router-config",
 				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: "pot-router-certs",
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "pot-router"},
+						Items: []corev1.KeyToPath{
+							{Key: "skrouterd.json", Path: "skrouterd.json"},
+						},
 					},
 				},
 			},
-		},
-		initContainers: []container{
 			{
-				name:            "router-config-init",
-				image:           cfg.adaptorImage,
-				imagePullPolicy: "Always",
-				env: []corev1.EnvVar{
-					{
-						Name:  "SKUPPER_ROUTER_CONFIG",
-						Value: "pot-router",
+				Name: "pot-router-site-server",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "pot-router-site-server",
 					},
 				},
-				volumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "pot-router-certs",
-						MountPath: "/etc/skupper-router-certs",
+			},
+			{
+				Name: "pot-router-local-server",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: "pot-router-local-server",
 					},
 				},
 			},
@@ -1046,11 +1003,15 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 					},
 					{
 						Name:  "QDROUTERD_CONF",
-						Value: "/etc/skupper-router-certs/skrouterd.json",
+						Value: "/tmp/skrouterd.json",
 					},
 					{
 						Name:  "QDROUTERD_CONF_TYPE",
 						Value: "json",
+					},
+					{
+						Name:  "SSL_PROFILE_PATH",
+						Value: "/etc/skupper-router-certs",
 					},
 					{
 						Name:  "SKUPPER_SITE_ID",
@@ -1060,66 +1021,23 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 						Name:  "SKUPPER_SITE_NAME",
 						Value: "default-router",
 					},
+					{
+						Name:  "SKUPPER_PLATFORM",
+						Value: "kubernetes",
+					},
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{
-						Name:      "pot-router-certs",
-						MountPath: cfg.volumeMountPath,
-					},
-				},
-			},
-			{
-				name:            "router-adaptor",
-				image:           cfg.adaptorImage,
-				imagePullPolicy: "Always",
-				env: []corev1.EnvVar{
-					{
-						Name: "SKUPPER_NAMESPACE",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.namespace",
-							},
-						},
+						Name:      "pot-router-config",
+						MountPath: "/tmp",
 					},
 					{
-						Name: "SKUPPER_NAME",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.namespace",
-							},
-						},
+						Name:      "pot-router-site-server",
+						MountPath: "/etc/skupper-router-certs/pot-router-site-server",
 					},
 					{
-						Name:  "SKUPPER_SITE_ID",
-						Value: "default-router",
-					},
-					{
-						Name:  "SKUPPER_ROUTER_CONFIG",
-						Value: "pot-router",
-					},
-					{
-						Name:  "SKUPPER_ROUTER_DEPLOYMENT",
-						Value: "router",
-					},
-				},
-				readinessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Port:   intstr.FromInt(9191),
-							Path:   "/healthz",
-							Scheme: corev1.URISchemeHTTP,
-						},
-					},
-					InitialDelaySeconds: 1,
-					TimeoutSeconds:      1,
-					PeriodSeconds:       10,
-					FailureThreshold:    3,
-					SuccessThreshold:    1,
-				},
-				volumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "pot-router-certs",
-						MountPath: "/etc/skupper-router-certs",
+						Name:      "pot-router-local-server",
+						MountPath: "/etc/skupper-router-certs/pot-router-local-server",
 					},
 				},
 			},

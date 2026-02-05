@@ -35,7 +35,6 @@ metadata:
             "images": {
               "pullSecret": "pullsecret",
               "controller": "ghcr.io/datasance/controller@sha256:a9df302208e61cff20240365fd00ae319ebeadb79ca5f0fd831e3b4ebe55041b",
-              "routerAdaptor": "ghcr.io/datasance/router-adaptor@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f",
               "router": "ghcr.io/datasance/router@sha256:82657fc8f39d33d8ef0161cf27d705cbdc0a97dca07b22a5fe78fd4213ef0d31"
             },
             "services": {
@@ -215,11 +214,6 @@ spec:
           - description: Image for the Control Plane controller component
             displayName: Controller Image
             path: images.controller
-            x-descriptors:
-              - urn:alm:descriptor:com.tectonic.ui:text
-          - description: Image for the RouterAdaptor component
-            displayName: RouterAdaptor Image
-            path: images.routerAdaptor
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:text
           - description: Image for the Router component
@@ -524,6 +518,4 @@ spec:
       image: ghcr.io/datasance/controller@sha256:a9df302208e61cff20240365fd00ae319ebeadb79ca5f0fd831e3b4ebe55041b
     - name: router
       image: ghcr.io/datasance/router@sha256:82657fc8f39d33d8ef0161cf27d705cbdc0a97dca07b22a5fe78fd4213ef0d31
-    - name: routerAdaptor
-      image: ghcr.io/datasance/router-adaptor@sha256:276dbed0c8ef4f5b03fdf29d5c863b6f3efcae50444ce8123220c5673272860f 
   version: 3.4.13

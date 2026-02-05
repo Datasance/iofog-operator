@@ -43,10 +43,12 @@ func reconcileRoutine(ctx context.Context, recon func(context.Context) op.Reconc
 }
 
 func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Context, ms *microservice) (shouldRestartPod bool, err error) {
+	stdLabels := getStandardLabels("controller", r.cp.Name)
 	for i := range ms.secrets {
 		secret := &ms.secrets[i]
 
 		if secret.Name == controllerDBCredentialsSecretName {
+			secret.Labels = mergeLabels(stdLabels, secret.Labels)
 			found := &corev1.Secret{}
 
 			err := r.Client.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
@@ -79,10 +81,10 @@ func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Contex
 func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) op.Reconciliation {
 	// Configure Controller
 	config := &controllerMicroserviceConfig{
+		controllerName:     r.cp.Name,
 		replicas:           r.cp.Spec.Replicas.Controller,
 		image:              r.cp.Spec.Images.Controller,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		routerAdaptorImage: r.cp.Spec.Images.RouterAdaptor,
 		routerImage:        r.cp.Spec.Images.Router,
 		db:                 &r.cp.Spec.Database,
 		auth:               &r.cp.Spec.Auth,
@@ -334,9 +336,6 @@ func (r *ControlPlaneReconciler) ImportCertificates(iofogClient *iofogclient.Cli
 }
 
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
-	// Configure
-	volumeMountPath := "/etc/skupper-router-certs"
-
 	// Check if HA is enabled (default to false if not specified)
 	haEnabled := false
 	// if r.cp.Spec.Router.HA != nil {
@@ -345,11 +344,9 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 
 	routerMicroservices := newRouterMicroservices(routerMicroserviceConfig{
 		image:              r.cp.Spec.Images.Router,
-		adaptorImage:       r.cp.Spec.Images.RouterAdaptor,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		serviceType:        r.cp.Spec.Services.Router.Type,
 		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
-		volumeMountPath:    volumeMountPath,
 		ha:                 haEnabled,
 	})
 
@@ -497,10 +494,12 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 	var siteCA, localCA corev1.Secret
 
 	// Generate CA certificates if they don't exist
+	routerLabels := getStandardLabels("router", r.cp.Name)
 	if !siteCAExists {
 		r.log.Info(fmt.Sprintf("Generating site CA Secret for Controlplane %s", r.cp.Name))
 		siteCA = util.GenerateSecret(SiteCaSecret, SiteCaSecret, SiteCaSecret, 0, nil)
 		siteCA.Namespace = namespace
+		siteCA.Labels = routerLabels
 		ms.secrets = append(ms.secrets, siteCA)
 	} else {
 		siteCA = *existingSiteCA
@@ -510,6 +509,7 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 		r.log.Info(fmt.Sprintf("Generating local CA Secret for Controlplane %s", r.cp.Name))
 		localCA = util.GenerateSecret(LocalCaSecret, LocalCaSecret, LocalCaSecret, 0, nil)
 		localCA.Namespace = namespace
+		localCA.Labels = routerLabels
 		ms.secrets = append(ms.secrets, localCA)
 	} else {
 		localCA = *existingLocalCA
@@ -520,6 +520,7 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 		r.log.Info(fmt.Sprintf("Generating site server certificate for Controlplane %s with address %s", r.cp.Name, address))
 		siteSecret := util.GenerateSecret(SiteServerSecret, siteSecretSubject, siteSecretAddress, 0, &siteCA)
 		siteSecret.Namespace = namespace
+		siteSecret.Labels = routerLabels
 		ms.secrets = append(ms.secrets, siteSecret)
 	} else {
 		ms.secrets = append(ms.secrets, *existingSiteServer)
@@ -529,6 +530,7 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 		r.log.Info(fmt.Sprintf("Generating local server certificate for Controlplane %s with address %s", r.cp.Name, address))
 		localSecret := util.GenerateSecret(LocalServerSecret, localSecretSubject, localSecretAddress, 0, &localCA)
 		localSecret.Namespace = namespace
+		localSecret.Labels = routerLabels
 		ms.secrets = append(ms.secrets, localSecret)
 	} else {
 		ms.secrets = append(ms.secrets, *existingLocalServer)

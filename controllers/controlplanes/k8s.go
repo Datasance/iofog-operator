@@ -60,7 +60,7 @@ func (r *ControlPlaneReconciler) restartPodsForDeployment(ctx context.Context, d
 }
 
 func (r *ControlPlaneReconciler) createDeployment(ctx context.Context, ms *microservice) error {
-	dep := newDeployment(r.cp.ObjectMeta.Namespace, ms)
+	dep := newDeployment(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
 	// Set ControlPlane instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&r.cp, dep, r.Scheme); err != nil {
 		return err
@@ -120,6 +120,7 @@ func (r *ControlPlaneReconciler) createPersistentVolumeClaims(ctx context.Contex
 
 		pvc.ObjectMeta.Name = ms.volumes[i].Name
 		pvc.ObjectMeta.Namespace = r.cp.Namespace
+		pvc.ObjectMeta.Labels = getStandardLabels(getComponentFromMicroservice(ms), r.cp.Name)
 		// Set ControlPlane instance as the owner and controller
 		if err := controllerutil.SetControllerReference(&r.cp, &pvc, r.Scheme); err != nil {
 			return err
@@ -161,8 +162,10 @@ func (r *ControlPlaneReconciler) createOrUpdateSecrets(ctx context.Context, ms *
 		}
 	}()
 
+	stdLabels := getStandardLabels(getComponentFromMicroservice(ms), r.cp.Name)
 	for i := range ms.secrets {
 		secret := &ms.secrets[i]
+		secret.Labels = mergeLabels(stdLabels, secret.Labels)
 		r.log.Info(fmt.Sprintf("Creating secret %s", secret.ObjectMeta.Name))
 		// Set ControlPlane instance as the owner and controller
 		r.log.Info(fmt.Sprintf("Setting owner reference for secret %s", secret.ObjectMeta.Name))
@@ -216,7 +219,7 @@ func (r *ControlPlaneReconciler) createOrUpdateSecrets(ctx context.Context, ms *
 }
 
 func (r *ControlPlaneReconciler) createService(ctx context.Context, ms *microservice) error {
-	svcs := newServices(r.cp.ObjectMeta.Namespace, ms)
+	svcs := newServices(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
 	for _, svc := range svcs {
 		// Set ControlPlane instance as the owner and controller
 		if err := controllerutil.SetControllerReference(&r.cp, svc, r.Scheme); err != nil {
@@ -249,7 +252,7 @@ func (r *ControlPlaneReconciler) createService(ctx context.Context, ms *microser
 }
 
 func (r *ControlPlaneReconciler) createIngress(ctx context.Context, cfg *controllerIngressConfig) error {
-	ingress := newControllerIngress(r.cp.ObjectMeta.Namespace, cfg)
+	ingress := newControllerIngress(r.cp.ObjectMeta.Namespace, r.cp.Name, cfg)
 
 	// Set ControlPlane instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&r.cp, ingress, r.Scheme); err != nil {
@@ -285,7 +288,7 @@ func (r *ControlPlaneReconciler) createIngress(ctx context.Context, cfg *control
 }
 
 func (r *ControlPlaneReconciler) createServiceAccount(ctx context.Context, ms *microservice) error {
-	svcAcc := newServiceAccount(r.cp.ObjectMeta.Namespace, ms)
+	svcAcc := newServiceAccount(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
 
 	// Set image pull secret for the service account
 	if ms.imagePullSecret != "" {
@@ -338,7 +341,7 @@ func (r *ControlPlaneReconciler) createServiceAccount(ctx context.Context, ms *m
 }
 
 func (r *ControlPlaneReconciler) createRole(ctx context.Context, ms *microservice) error { //nolint:dupl
-	role := newRole(r.cp.ObjectMeta.Namespace, ms)
+	role := newRole(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
 
 	// Set ControlPlane instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&r.cp, role, r.Scheme); err != nil {
@@ -370,7 +373,7 @@ func (r *ControlPlaneReconciler) createRole(ctx context.Context, ms *microservic
 }
 
 func (r *ControlPlaneReconciler) createRoleBinding(ctx context.Context, ms *microservice) error { //nolint:dupl
-	crb := newRoleBinding(r.cp.ObjectMeta.Namespace, ms)
+	crb := newRoleBinding(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
 
 	// Set ControlPlane instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&r.cp, crb, r.Scheme); err != nil {
@@ -610,7 +613,7 @@ func mergeConfigs(existingConfig, newConfig string) (string, error) {
 }
 
 func (r *ControlPlaneReconciler) createConfigMap(ctx context.Context) error {
-	configMap := newRouterConfigMap(r.cp.ObjectMeta.Namespace)
+	configMap := newRouterConfigMap(r.cp.ObjectMeta.Namespace, r.cp.Name)
 
 	// Set owner reference
 	if err := controllerutil.SetControllerReference(&r.cp, configMap, r.Scheme); err != nil {
@@ -635,8 +638,9 @@ func (r *ControlPlaneReconciler) createConfigMap(ctx context.Context) error {
 		return fmt.Errorf("failed to merge configs: %w", err)
 	}
 
-	// Update ConfigMap with merged configuration
+	// Update ConfigMap with merged configuration and standard labels
 	existingConfigMap.Data["skrouterd.json"] = mergedConfig
+	existingConfigMap.Labels = mergeLabels(configMap.Labels, existingConfigMap.Labels)
 	return r.Client.Update(ctx, existingConfigMap)
 }
 

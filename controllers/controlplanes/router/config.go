@@ -48,6 +48,13 @@ const rawRouterConfig = `
     [
         "sslProfile",
         {
+            "name": "system-default",
+            "certFile": "/etc/pki/tls/certs/ca-bundle.crt"
+        }
+    ],
+    [
+        "sslProfile",
+        {
             "name": "pot-router-site-server",
             "certFile": "/etc/skupper-router-certs/pot-router-site-server/tls.crt",
             "privateKeyFile": "/etc/skupper-router-certs/pot-router-site-server/tls.key",
