@@ -41,6 +41,7 @@ type ControlPlaneReconciler struct {
 // +kubebuilder:rbac:groups=datasance.com,resources=controlplanes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=datasance.com,resources=controlplanes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=datasance.com,resources=controlplanes/finalizers,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ControlPlaneReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	r.log = r.Log.WithValues("controlplane", request.NamespacedName)
