@@ -94,10 +94,10 @@ func (in *ApplicationSpec) DeepCopyInto(out *ApplicationSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.Routes != nil {
-		in, out := &in.Routes, &out.Routes
-		*out = make([]apps.Route, len(*in))
-		copy(*out, *in)
+	if in.NatsConfig != nil {
+		in, out := &in.NatsConfig, &out.NatsConfig
+		*out = new(apps.ApplicationNatsConfig)
+		**out = **in
 	}
 }
 

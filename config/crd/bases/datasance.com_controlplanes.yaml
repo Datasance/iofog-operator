@@ -135,6 +135,8 @@ spec:
                 properties:
                   controller:
                     type: string
+                  nats:
+                    type: string
                   pullSecret:
                     type: string
                   router:
@@ -157,6 +159,24 @@ spec:
                       secretName:
                         type: string
                     type: object
+                  nats:
+                    description: |-
+                      NatsIngress specifies the external address and ports for NATS hub registration (required when using ingress).
+                      Ports are optional and default to: server 4222, cluster 6222, leaf 7422, mqtt 8883, http 8222.
+                    properties:
+                      address:
+                        type: string
+                      clusterPort:
+                        type: integer
+                      httpPort:
+                        type: integer
+                      leafPort:
+                        type: integer
+                      mqttPort:
+                        type: integer
+                      serverPort:
+                        type: integer
+                    type: object
                   router:
                     properties:
                       address:
@@ -169,12 +189,47 @@ spec:
                         type: integer
                     type: object
                 type: object
+              nats:
+                description: Nats contains NATS hub configuration (StatefulSet, JetStream,
+                  etc.). When omitted, NATS is enabled with defaults.
+                properties:
+                  enabled:
+                    description: Enabled toggles NATS deployment. When omitted, treated
+                      as true.
+                    type: boolean
+                  headlessPorts:
+                    description: |-
+                      HeadlessPorts when true (default) exposes client (4222) and monitoring (8222) only on the headless service.
+                      When false, client and monitoring are also on the client-facing Service.
+                    type: boolean
+                  jetStream:
+                    description: JetStream storage and memory limits.
+                    properties:
+                      memoryStoreSize:
+                        description: MemoryStoreSize is used for max_memory_store
+                          in server.conf only (default 1Gi).
+                        type: string
+                      storageClassName:
+                        description: StorageClassName for the JetStream PVC (optional).
+                        type: string
+                      storageSize:
+                        description: StorageSize is used for the PVC size and max_file_store
+                          in server.conf (default 10Gi).
+                        type: string
+                    type: object
+                type: object
               replicas:
                 description: Replicas of ioFog Controller should be 1 unless an external
                   DB is configured
                 properties:
                   controller:
                     format: int32
+                    type: integer
+                  nats:
+                    description: Nats is the number of NATS server replicas (default
+                      2, min 2 when NATS enabled).
+                    format: int32
+                    minimum: 2
                     type: integer
                 type: object
               services:
@@ -192,6 +247,17 @@ spec:
                       type:
                         type: string
                     type: object
+                  nats:
+                    properties:
+                      address:
+                        type: string
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      type:
+                        type: string
+                    type: object
                   router:
                     properties:
                       address:
@@ -203,6 +269,66 @@ spec:
                       type:
                         type: string
                     type: object
+                type: object
+              vault:
+                description: Vault is optional. When set, the Controller uses the
+                  configured vault provider for secrets. Operator creates a Secret
+                  from provider-specific config and injects env vars.
+                properties:
+                  aws:
+                    description: Aws provider config. Set when provider is aws or
+                      aws-secrets-manager.
+                    properties:
+                      accessKey:
+                        type: string
+                      accessKeyId:
+                        type: string
+                      region:
+                        type: string
+                    type: object
+                  azure:
+                    description: Azure provider config. Set when provider is azure
+                      or azure-key-vault.
+                    properties:
+                      clientId:
+                        type: string
+                      clientSecret:
+                        type: string
+                      tenantId:
+                        type: string
+                      url:
+                        type: string
+                    type: object
+                  basePath:
+                    description: BasePath for secrets in vault; $namespace is replaced
+                      with the ControlPlane namespace (e.g. pot/$namespace/secrets).
+                    type: string
+                  enabled:
+                    type: boolean
+                  google:
+                    description: Google provider config. Set when provider is google
+                      or google-secret-manager.
+                    properties:
+                      credentials:
+                        type: string
+                      projectId:
+                        type: string
+                    type: object
+                  hashicorp:
+                    description: Hashicorp (and openbao/vault) provider config. Set
+                      when provider is hashicorp, openbao, or vault.
+                    properties:
+                      address:
+                        type: string
+                      mount:
+                        type: string
+                      token:
+                        type: string
+                    type: object
+                  provider:
+                    description: 'Provider: hashicorp, openbao, vault, aws, aws-secrets-manager,
+                      azure, azure-key-vault, google, google-secret-manager.'
+                    type: string
                 type: object
             required:
             - auth

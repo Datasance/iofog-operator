@@ -58,11 +58,14 @@ func (r *ControlPlaneReconciler) reconcileDeploying(ctx context.Context) op.Reco
 	r.log.Info(fmt.Sprintf("reconcileDeploying() ControlPlane %s", r.cp.Name))
 
 	// Error chan for reconcile routines
-	reconcilerCount := 2
+	reconcilerCount := 3
 	reconChan := make(chan op.Reconciliation, reconcilerCount)
 
 	// Reconcile Router
 	go reconcileRoutine(ctx, r.reconcileRouter, reconChan)
+
+	// Reconcile NATS (when enabled)
+	go reconcileRoutine(ctx, r.reconcileNats, reconChan)
 
 	// Reconcile Iofog Controller
 	go reconcileRoutine(ctx, r.reconcileIofogController, reconChan)
@@ -128,11 +131,14 @@ func (r *ControlPlaneReconciler) reconcileUpdating(ctx context.Context) op.Recon
 	r.log.Info(fmt.Sprintf("reconcileUpdating() ControlPlane %s", r.cp.Name))
 
 	// Error chan for reconcile routines
-	reconcilerCount := 2
+	reconcilerCount := 3
 	reconChan := make(chan op.Reconciliation, reconcilerCount)
 
 	// Reconcile Router
 	go reconcileRoutine(ctx, r.reconcileRouter, reconChan)
+
+	// Reconcile NATS (when enabled)
+	go reconcileRoutine(ctx, r.reconcileNats, reconChan)
 
 	// Reconcile Iofog Controller
 	go reconcileRoutine(ctx, r.reconcileIofogController, reconChan)

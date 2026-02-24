@@ -94,6 +94,28 @@ func (r *ControlPlaneReconciler) createDeployment(ctx context.Context, ms *micro
 	return nil
 }
 
+func (r *ControlPlaneReconciler) createStatefulSet(ctx context.Context, ms *microservice) error {
+	st := newStatefulSet(r.cp.ObjectMeta.Namespace, r.cp.Name, ms)
+	if err := controllerutil.SetControllerReference(&r.cp, st, r.Scheme); err != nil {
+		return err
+	}
+	found := &appsv1.StatefulSet{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, found)
+	if err != nil && k8serrors.IsNotFound(err) {
+		r.log.Info("Creating a new StatefulSet", "StatefulSet.Namespace", st.Namespace, "StatefulSet.Name", st.Name)
+		return r.Client.Create(ctx, st)
+	}
+	if err != nil {
+		return err
+	}
+	r.log.Info("Updating existing StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
+
+	if err := r.Client.Update(ctx, st); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *ControlPlaneReconciler) createPersistentVolumeClaims(ctx context.Context, ms *microservice) error {
 	for i := range ms.volumes {
 		if ms.volumes[i].VolumeSource.PersistentVolumeClaim == nil {
@@ -474,6 +496,40 @@ func (r *ControlPlaneReconciler) createDefaultRouter(iofogClient *iofogclient.Cl
 	return iofogClient.PutDefaultRouter(routerConfig)
 }
 
+// createDefaultNatsHub registers the default NATS hub with the Controller (only when NATS is enabled).
+func (r *ControlPlaneReconciler) createDefaultNatsHub(iofogClient *iofogclient.Client, ing cpv3.NatsIngress) error {
+	serverPort := ing.ServerPort
+	if serverPort == 0 {
+		serverPort = 4222
+	}
+	clusterPort := ing.ClusterPort
+	if clusterPort == 0 {
+		clusterPort = 6222
+	}
+	leafPort := ing.LeafPort
+	if leafPort == 0 {
+		leafPort = 7422
+	}
+	mqttPort := ing.MqttPort
+	if mqttPort == 0 {
+		mqttPort = 8883
+	}
+	httpPort := ing.HttpPort
+	if httpPort == 0 {
+		httpPort = 8222
+	}
+	req := &iofogclient.NatsHubRequest{
+		Host:        &ing.Address,
+		ServerPort:  &serverPort,
+		ClusterPort: &clusterPort,
+		LeafPort:    &leafPort,
+		MqttPort:    &mqttPort,
+		HttpPort:    &httpPort,
+	}
+	_, err := iofogClient.UpsertNatsHub(req)
+	return err
+}
+
 // ConfigEntry represents a single entry in the router configuration
 type ConfigEntry []interface{}
 
@@ -498,14 +554,14 @@ func shouldUpdate(entry ConfigEntry) bool {
 		return true
 	case "sslProfile":
 		if name, ok := data["name"].(string); ok {
-			return name == "pot-router-site-server" || name == "pot-router-local-server"
+			return name == "router-site-server" || name == "router-local-server"
 		}
 		return false
 	case "listener":
 		if name, ok := data["name"].(string); ok {
-			return name == "pot-router-edge" || name == "amqp" ||
+			return name == "iofog-router-edge" || name == "amqp" ||
 				name == "amqps" || name == "@9090" ||
-				name == "pot-router-inter-router"
+				name == "iofog-router-inter-router"
 		}
 		return false
 	default:

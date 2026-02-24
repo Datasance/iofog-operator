@@ -87,7 +87,16 @@ metadata:
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ControlPlane deploys and manages the ioFog control plane.
+      kind: ControlPlane
+      name: controlplanes.datasance.com
+      version: v3
+    - description: Application defines an ioFog application.
+      kind: Application
+      name: applications.datasance.com
+      version: v3
   description: ioFog Control Plane on Kubernetes
   displayName: iofog-operator
   icon:

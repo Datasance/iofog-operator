@@ -12,6 +12,7 @@ import (
 	k8sclient "github.com/datasance/iofog-go-sdk/v3/pkg/k8s"
 	op "github.com/datasance/iofog-go-sdk/v3/pkg/k8s/operator"
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/nats"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	openidutil "github.com/datasance/iofog-operator/v3/internal/util"
 	util "github.com/datasance/iofog-operator/v3/internal/util/certs"
@@ -20,7 +21,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const (
@@ -34,6 +37,18 @@ func getEventsIfConfigured(events cpv3.Events) *cpv3.Events {
 	// Check if at least one field is configured
 	if events.AuditEnabled != nil || events.CaptureIpAddress != nil || events.RetentionDays != 0 || events.CleanupInterval != 0 {
 		return &events
+	}
+	return nil
+}
+
+// getVaultIfConfigured returns spec.Vault if vault is configured (non-nil and has provider or provider-specific block), otherwise nil.
+func getVaultIfConfigured(spec cpv3.ControlPlaneSpec) *cpv3.Vault {
+	if spec.Vault == nil {
+		return nil
+	}
+	v := spec.Vault
+	if v.Provider != "" || v.Hashicorp != nil || v.Aws != nil || v.Azure != nil || v.Google != nil {
+		return v
 	}
 	return nil
 }
@@ -78,6 +93,36 @@ func (r *ControlPlaneReconciler) reconcileDBCredentialsSecret(ctx context.Contex
 	return false, nil
 }
 
+func (r *ControlPlaneReconciler) reconcileVaultCredentialsSecret(ctx context.Context, ms *microservice) (shouldRestartPod bool, err error) {
+	stdLabels := getStandardLabels("controller", r.cp.Name)
+	for i := range ms.secrets {
+		secret := &ms.secrets[i]
+		if secret.Name != controllerVaultCredentialsSecretName {
+			continue
+		}
+		secret.Labels = mergeLabels(stdLabels, secret.Labels)
+		if setErr := controllerutil.SetControllerReference(&r.cp, secret, r.Scheme); setErr != nil {
+			return false, setErr
+		}
+		found := &corev1.Secret{}
+		getErr := r.Client.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
+		if getErr != nil {
+			if !k8serrors.IsNotFound(getErr) {
+				return false, getErr
+			}
+			if createErr := r.Client.Create(ctx, secret); createErr != nil {
+				return false, createErr
+			}
+			return false, nil
+		}
+		if updateErr := r.Client.Update(ctx, secret); updateErr != nil {
+			return false, updateErr
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) op.Reconciliation {
 	// Configure Controller
 	config := &controllerMicroserviceConfig{
@@ -86,6 +131,8 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		image:              r.cp.Spec.Images.Controller,
 		imagePullSecret:    r.cp.Spec.Images.PullSecret,
 		routerImage:        r.cp.Spec.Images.Router,
+		natsImage:          r.cp.Spec.Images.Nats,
+		natsEnabled:        isNatsEnabled(r.cp),
 		db:                 &r.cp.Spec.Database,
 		auth:               &r.cp.Spec.Auth,
 		serviceType:        r.cp.Spec.Services.Controller.Type,
@@ -99,6 +146,7 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
 		logLevel:           r.cp.Spec.Controller.LogLevel,
 		events:             getEventsIfConfigured(r.cp.Spec.Events),
+		vault:              getVaultIfConfigured(r.cp.Spec),
 	}
 
 	ingressConfig := &controllerIngressConfig{
@@ -138,6 +186,14 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 	shouldRestartPods, err := r.reconcileDBCredentialsSecret(ctx, ms)
 	if err != nil {
 		return op.ReconcileWithError(err)
+	}
+	// Handle vault credentials secret (operator-created from spec)
+	restartVault, err := r.reconcileVaultCredentialsSecret(ctx, ms)
+	if err != nil {
+		return op.ReconcileWithError(err)
+	}
+	if restartVault {
+		shouldRestartPods = true
 	}
 	// Create secrets
 	r.log.Info(fmt.Sprintf("Creating secrets for controller reconcile for Controlplane %s", r.cp.Name))
@@ -233,7 +289,26 @@ func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) o
 		return op.ReconcileWithError(err)
 	}
 
-	// Import router certificates
+	// Register default NATS hub when NATS is enabled
+	if isNatsEnabled(r.cp) {
+		natsIngress := r.cp.Spec.Ingresses.Nats
+		if strings.EqualFold(r.cp.Spec.Services.Nats.Type, string(corev1.ServiceTypeLoadBalancer)) {
+			//nolint:contextcheck // k8sClient does not accept context
+			natsAddr, err := k8sClient.WaitForLoadBalancer(r.cp.Namespace, nats.ClientServiceName, loadBalancerTimeout)
+			if err != nil {
+				return op.ReconcileWithError(err)
+			}
+			natsIngress.Address = natsAddr
+		}
+		if natsIngress.Address != "" {
+			if err := r.createDefaultNatsHub(iofogClient, natsIngress); err != nil {
+				r.log.Info(fmt.Sprintf("Failed to register NATS hub for ControlPlane %s: %s", r.cp.Name, err.Error()))
+				return op.ReconcileWithRequeue(time.Second * 10)
+			}
+		}
+	}
+
+	// Import router and NATS certificates
 	if recon := r.ImportCertificates(iofogClient); recon.IsFinal() {
 		return recon
 	}
@@ -322,7 +397,7 @@ func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port
 
 func (r *ControlPlaneReconciler) ImportCertificates(iofogClient *iofogclient.Client) op.Reconciliation {
 	r.log.Info(fmt.Sprintf("Importing certificates for ControlPlane %s", r.cp.Name))
-	if err := r.ImportRouterCACertificate(iofogClient, "pot-site-ca"); err != nil {
+	if err := r.ImportRouterCACertificate(iofogClient, "router-site-ca"); err != nil {
 		r.log.Info(fmt.Sprintf("Failed to import certificates for ControlPlane %s: %s", r.cp.Name, err.Error()))
 		return op.ReconcileWithRequeue(time.Second * 10)
 	}
@@ -332,7 +407,38 @@ func (r *ControlPlaneReconciler) ImportCertificates(iofogClient *iofogclient.Cli
 		return op.ReconcileWithRequeue(time.Second * 10)
 	}
 
+	if isNatsEnabled(r.cp) {
+		if err := r.ImportRouterCACertificate(iofogClient, nats.NatsSiteCASecret); err != nil {
+			r.log.Info(fmt.Sprintf("Failed to import NATS site CA for ControlPlane %s: %s", r.cp.Name, err.Error()))
+			return op.ReconcileWithRequeue(time.Second * 10)
+		}
+		if err := r.ImportRouterCACertificate(iofogClient, nats.NatsLocalCASecret); err != nil {
+			r.log.Info(fmt.Sprintf("Failed to import NATS local CA for ControlPlane %s: %s", r.cp.Name, err.Error()))
+			return op.ReconcileWithRequeue(time.Second * 10)
+		}
+	}
+
 	return op.Continue()
+}
+
+// getControllerClientForNats returns an iofog client for the ControlPlane's controller (in-cluster DNS).
+// Used to call GET /api/v3/nats/bootstrap. Requeues if the controller is not reachable yet.
+func (r *ControlPlaneReconciler) getControllerClientForNats() (*iofogclient.Client, op.Reconciliation) {
+	scheme := "http"
+	if r.cp.Spec.Controller.Https != nil && *r.cp.Spec.Controller.Https {
+		scheme = "https"
+	}
+	host := fmt.Sprintf("controller.%s.svc.cluster.local", r.cp.Namespace)
+	const controllerAPIPort = 51121
+	return r.getIofogClient(scheme, host, controllerAPIPort)
+}
+
+// isNatsEnabled returns true when NATS is enabled (Spec.Nats nil or Enabled not false, and Replicas.Nats >= 2).
+func isNatsEnabled(cp cpv3.ControlPlane) bool {
+	if cp.Spec.Nats != nil && cp.Spec.Nats.Enabled != nil && !*cp.Spec.Nats.Enabled {
+		return false
+	}
+	return true
 }
 
 func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconciliation {
@@ -434,6 +540,262 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	return op.Continue()
 }
 
+func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconciliation {
+	if !isNatsEnabled(r.cp) {
+		return op.Continue()
+	}
+	namespace := r.cp.Namespace
+	instanceName := r.cp.Name
+	natsLabels := getStandardLabels("nats", instanceName)
+	replicas := r.cp.Spec.Replicas.Nats
+	if replicas < 2 {
+		replicas = 2
+	}
+
+	// Bootstrap from Controller API (GET /api/v3/nats/bootstrap). Controller performs bootstrap; operator only saves secrets (creds come base64 in response).
+	iofogClient, recon := r.getControllerClientForNats()
+	if recon.IsFinal() {
+		return recon
+	}
+	if err := r.loginIofogClient(iofogClient); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "invalid credentials") {
+			r.log.Info(fmt.Sprintf("Could not login for NATS bootstrap ControlPlane %s: %s", r.cp.Name, err.Error()))
+			return op.ReconcileWithError(err)
+		}
+	}
+	bootstrapResp, err := iofogClient.GetNatsBootstrap()
+	if err != nil {
+		r.log.Error(err, "NATS bootstrap API failed")
+		return op.ReconcileWithError(fmt.Errorf("get NATS bootstrap from Controller: %w", err))
+	}
+	createOrUpdateSecret := func(ctx context.Context, s *corev1.Secret) error {
+		if err := controllerutil.SetControllerReference(&r.cp, s, r.Scheme); err != nil {
+			return err
+		}
+		err := r.Client.Create(ctx, s)
+		if err == nil {
+			return nil
+		}
+		if !k8serrors.IsAlreadyExists(err) {
+			return err
+		}
+		existing := &corev1.Secret{}
+		if err := r.Client.Get(ctx, types.NamespacedName{Name: s.Name, Namespace: s.Namespace}, existing); err != nil {
+			return err
+		}
+		existing.Data = s.Data
+		existing.Labels = mergeLabels(natsLabels, existing.Labels)
+		return r.Client.Update(ctx, existing)
+	}
+	bootstrap, err := nats.EnsureNatsBootstrapFromController(ctx, createOrUpdateSecret, namespace, natsLabels, &nats.BootstrapFromAPI{
+		OperatorJwt:            bootstrapResp.OperatorJwt,
+		OperatorPublicKey:      bootstrapResp.OperatorPublicKey,
+		OperatorSeed:           bootstrapResp.OperatorSeed,
+		SystemAccountJwt:       bootstrapResp.SystemAccountJwt,
+		SystemAccountPublicKey: bootstrapResp.SystemAccountPublicKey,
+		SysUserCredsBase64:     bootstrapResp.SysUserCredsBase64,
+	})
+	if err != nil {
+		r.log.Error(err, "NATS bootstrap save secrets failed")
+		return op.ReconcileWithError(err)
+	}
+
+	// JetStream key secret
+	_, err = nats.EnsureJetStreamKeySecret(ctx,
+		func(ctx context.Context, nn types.NamespacedName, s *corev1.Secret) error {
+			return r.Client.Get(ctx, nn, s)
+		},
+		func(ctx context.Context, s *corev1.Secret) error {
+			if err := controllerutil.SetControllerReference(&r.cp, s, r.Scheme); err != nil {
+				return err
+			}
+			return r.Client.Create(ctx, s)
+		},
+		namespace, instanceName, natsLabels)
+	if err != nil {
+		return op.ReconcileWithError(err)
+	}
+
+	headlessPorts := true
+	if r.cp.Spec.Nats != nil && r.cp.Spec.Nats.HeadlessPorts != nil {
+		headlessPorts = *r.cp.Spec.Nats.HeadlessPorts
+	}
+	// PVC uses Gi/Mi (Kubernetes); NATS server.conf uses G/M/T/K (NATS does not support Gi, Mi).
+	storageSizePVC := nats.DefaultStorageSizePVC
+	storageSizeNats := nats.DefaultStorageSize
+	memoryStoreSizeNats := nats.DefaultMemoryStoreSize
+	if r.cp.Spec.Nats != nil {
+		if r.cp.Spec.Nats.JetStream.StorageSize != "" {
+			storageSizePVC = r.cp.Spec.Nats.JetStream.StorageSize
+			storageSizeNats = nats.ToNatsSize(r.cp.Spec.Nats.JetStream.StorageSize)
+		}
+		if r.cp.Spec.Nats.JetStream.MemoryStoreSize != "" {
+			memoryStoreSizeNats = nats.ToNatsSize(r.cp.Spec.Nats.JetStream.MemoryStoreSize)
+		}
+	}
+	natsSvcType := corev1.ServiceTypeClusterIP
+	if r.cp.Spec.Services.Nats.Type != "" {
+		natsSvcType = corev1.ServiceType(r.cp.Spec.Services.Nats.Type)
+	}
+	natsMs := newNatsMicroservice(natsMicroserviceConfig{
+		image:              openidutil.GetNatsImage(),
+		imagePullSecret:    r.cp.Spec.Images.PullSecret,
+		replicas:           replicas,
+		storageSize:        storageSizePVC,
+		storageClassName:   "",
+		headlessPorts:      headlessPorts,
+		jetStreamKeySecret: nats.JetStreamKeySecretName(instanceName),
+		serviceType:        string(natsSvcType),
+		serviceAnnotations: r.cp.Spec.Services.Nats.Annotations,
+	})
+	if r.cp.Spec.Images.Nats != "" {
+		natsMs.containers[0].image = r.cp.Spec.Images.Nats
+	}
+	if r.cp.Spec.Nats != nil && r.cp.Spec.Nats.JetStream.StorageClassName != "" {
+		natsMs.volumeClaimTemplates[0].Spec.StorageClassName = &r.cp.Spec.Nats.JetStream.StorageClassName
+	}
+
+	// Create NATS Services first (via microservice flow) so we can resolve address for TLS SANs, like router
+	if err := r.createServiceAccount(ctx, natsMs); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	if err := r.createRole(ctx, natsMs); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	if err := r.createRoleBinding(ctx, natsMs); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	if err := r.createService(ctx, natsMs); err != nil {
+		return op.ReconcileWithError(err)
+	}
+
+	// Resolve NATS address (LB or ingress) for TLS cert SANs and hub registration, same pattern as router
+	var natsAddress string
+	if strings.EqualFold(r.cp.Spec.Services.Nats.Type, string(corev1.ServiceTypeLoadBalancer)) {
+		k8sClient, k8sErr := newK8sClient()
+		if k8sErr != nil {
+			return op.ReconcileWithError(k8sErr)
+		}
+		//nolint:contextcheck // k8sClient does not accept context
+		natsAddress, err = k8sClient.WaitForLoadBalancer(namespace, nats.ClientServiceName, loadBalancerTimeout)
+		if err != nil {
+			return op.ReconcileWithError(err)
+		}
+	} else if r.cp.Spec.Ingresses.Nats.Address != "" {
+		natsAddress = r.cp.Spec.Ingresses.Nats.Address
+	}
+
+	// When replica count changes, nats-site-server (and nats-mqtt-server) cert SANs are stale;
+	// delete them so EnsureNatsSecrets recreates them with hosts for all current replicas.
+	desiredReplicasStr := fmt.Sprintf("%d", replicas)
+	existingSiteServer := &corev1.Secret{}
+	err = r.Client.Get(ctx, types.NamespacedName{Name: nats.NatsSiteServerSecret, Namespace: namespace}, existingSiteServer)
+	if err == nil {
+		annotatedReplicas := existingSiteServer.Annotations["datasance.com/nats-replicas"]
+		if annotatedReplicas != desiredReplicasStr {
+			for _, name := range []string{nats.NatsSiteServerSecret, nats.NatsMqttServerSecret} {
+				delErr := r.Client.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}})
+				if delErr != nil && !k8serrors.IsNotFound(delErr) {
+					return op.ReconcileWithError(delErr)
+				}
+			}
+		}
+	}
+
+	// NATS TLS secrets (with external address in SANs like createRouterSecrets)
+	tlsSecrets, err := nats.EnsureNatsSecrets(ctx,
+		func(ctx context.Context, nn types.NamespacedName, s *corev1.Secret) error {
+			return r.Client.Get(ctx, nn, s)
+		},
+		namespace, instanceName, nats.HeadlessServiceName, int(replicas), natsAddress, natsLabels)
+	if err != nil {
+		return op.ReconcileWithError(err)
+	}
+	for i := range tlsSecrets {
+		if err := controllerutil.SetControllerReference(&r.cp, &tlsSecrets[i], r.Scheme); err != nil {
+			return op.ReconcileWithError(err)
+		}
+		if err := r.Client.Create(ctx, &tlsSecrets[i]); err != nil && !k8serrors.IsAlreadyExists(err) {
+			return op.ReconcileWithError(err)
+		}
+	}
+
+	// JetStream key value for server.conf (read from secret)
+	jetStreamKeySecret := &corev1.Secret{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: nats.JetStreamKeySecretName(instanceName), Namespace: namespace}, jetStreamKeySecret); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	jetStreamKey := string(jetStreamKeySecret.Data["jsk"])
+	jetStreamPrev := string("")
+
+	// Preserve controller-added cluster routes when merging: get existing server.conf if present.
+	existingServerConf := ""
+	existingNatsCM := &corev1.ConfigMap{}
+	if getErr := r.Client.Get(ctx, types.NamespacedName{Name: nats.ConfigMapName, Namespace: namespace}, existingNatsCM); getErr == nil {
+		if data := existingNatsCM.Data[nats.ServerConfKey()]; data != "" {
+			existingServerConf = data
+		}
+	}
+
+	// JETSTREAM_DOMAIN = controlplane namespace (Controller: CONTROLLER_NAMESPACE / app.namespace)
+	serverConf := nats.BuildServerConf(nats.ServerConfParams{
+		ServerPort:      nats.DefaultServerPort,
+		HttpPort:        nats.DefaultHttpPort,
+		OperatorJWT:     bootstrap.OperatorJWT,
+		SystemAccount:   bootstrap.SystemAccountPubKey,
+		JetStreamDomain: namespace,
+		JetStreamKey:    jetStreamKey,
+		JetStreamPrev:   jetStreamPrev,
+		ClusterRoutes:   nats.ClusterRoutesMerge(nats.HeadlessServiceName, int(replicas), nats.DefaultClusterPort, existingServerConf),
+		SSLDir:          "/etc/nats/certs",
+		CertName:        nats.NatsSiteServerSecret,
+		MqttCertName:    nats.NatsMqttServerSecret,
+		LeafPort:        nats.DefaultLeafPort,
+		ClusterPort:     nats.DefaultClusterPort,
+		MqttPort:        nats.DefaultMqttPort,
+		JWTDir:          "/etc/nats/jwt",
+		ControllerName:  instanceName,
+		MaxMemoryStore:  memoryStoreSizeNats,
+		MaxFileStore:    storageSizeNats,
+	})
+
+	configMap := nats.NewNatsConfigMap(namespace, instanceName, natsLabels, serverConf)
+	if err := controllerutil.SetControllerReference(&r.cp, configMap, r.Scheme); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	// Always create or update ConfigMap so replica count / routes stay in sync when CR is updated.
+	existingCM := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, existingCM)
+	if err != nil && k8serrors.IsNotFound(err) {
+		if err = r.Client.Create(ctx, configMap); err != nil {
+			return op.ReconcileWithError(err)
+		}
+	} else if err != nil {
+		return op.ReconcileWithError(err)
+	} else {
+		existingCM.Data = configMap.Data
+		existingCM.Labels = mergeLabels(natsLabels, existingCM.Labels)
+		if err = r.Client.Update(ctx, existingCM); err != nil {
+			return op.ReconcileWithError(err)
+		}
+	}
+
+	jwtBundle := nats.NewJWTBundleConfigMap(namespace, natsLabels, map[string]string{bootstrap.SystemAccountPubKey: bootstrap.SystemAccountJWT})
+	if err := controllerutil.SetControllerReference(&r.cp, jwtBundle, r.Scheme); err != nil {
+		return op.ReconcileWithError(err)
+	}
+	if err := r.Client.Create(ctx, jwtBundle); err != nil && !k8serrors.IsAlreadyExists(err) {
+		return op.ReconcileWithError(err)
+	}
+
+	// Create StatefulSet via shared microservice flow (same as Deployment for controller/router but with isStatefulSet flag)
+	if err := r.createStatefulSet(ctx, natsMs); err != nil {
+		return op.ReconcileWithError(err)
+	}
+
+	return op.Continue()
+}
+
 // createRouterSecrets creates the secrets for the router.
 // It generates the CA and secrets for the router.
 // It also appends the secrets to the microservice.secrets slice.
@@ -449,10 +811,10 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 
 	const (
 		LocalClientSecret        string = "skupper-local-client"
-		LocalServerSecret        string = "pot-router-local-server"
+		LocalServerSecret        string = "router-local-server"
 		LocalCaSecret            string = "default-router-local-ca"
-		SiteServerSecret         string = "pot-router-site-server"
-		SiteCaSecret             string = "pot-site-ca"
+		SiteServerSecret         string = "router-site-server"
+		SiteCaSecret             string = "router-site-ca"
 		ConsoleServerSecret      string = "skupper-console-certs"
 		ConsoleUsersSecret       string = "skupper-console-users"
 		PrometheusServerSecret   string = "skupper-prometheus-certs"
@@ -468,8 +830,8 @@ func (r *ControlPlaneReconciler) createRouterSecrets(namespace string, ms *micro
 	existingLocalServer := &corev1.Secret{}
 	siteSecretAddress := fmt.Sprintf("%s.%s.svc.cluster.local,%s", ms.name, namespace, address)
 	localSecretAddress := fmt.Sprintf("%s.%s.svc.cluster.local,%s", ms.name, namespace, address)
-	siteSecretSubject := fmt.Sprintf("pot-router")
-	localSecretSubject := fmt.Sprintf("pot-router-local")
+	siteSecretSubject := fmt.Sprintf("iofog-router")
+	localSecretSubject := fmt.Sprintf("iofog-router-local")
 
 	// Try to get existing secrets
 	err = r.Client.Get(context.Background(), types.NamespacedName{Name: SiteCaSecret, Namespace: namespace}, existingSiteCA)

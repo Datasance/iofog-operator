@@ -19,10 +19,12 @@ import (
 	"strings"
 
 	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
+	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/nats"
 	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
 	"github.com/datasance/iofog-operator/v3/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -43,6 +45,7 @@ const (
 	controlllerAuthControllerClientSecretSecretKey = "auth-controller-client-secret"
 	controlllerAuthViewerClientSecretKey           = "auth-viewer-client"
 	controllerDBCredentialsSecretName              = "controller-db-credentials" //nolint:gosec
+	controllerVaultCredentialsSecretName           = "controller-vault-credentials"
 	controllerDBUserSecretKey                      = "username"
 	controllerDBDBNameSecretKey                    = "dbname"
 	controllerDBPasswordSecretKey                  = "password"
@@ -59,6 +62,8 @@ type service struct {
 	serviceType        string
 	serviceAnnotations map[string]string
 	ports              []corev1.ServicePort
+	// headless when true sets ClusterIP: None (for StatefulSet headless service)
+	headless bool
 }
 
 type microservice struct {
@@ -76,6 +81,10 @@ type microservice struct {
 	rbacRules             []rbacv1.PolicyRule
 	mustRecreateOnRollout bool
 	availableDelay        int32
+	// isStatefulSet when true installs as StatefulSet instead of Deployment (e.g. NATS)
+	isStatefulSet          bool
+	statefulSetServiceName string // headless service name for StatefulSet (e.g. nats-headless)
+	volumeClaimTemplates   []corev1.PersistentVolumeClaim
 }
 
 type container struct {
@@ -85,6 +94,7 @@ type container struct {
 	args            []string
 	readinessProbe  *corev1.Probe
 	livenessProbe   *corev1.Probe
+	startupProbe    *corev1.Probe
 	env             []corev1.EnvVar
 	command         []string
 	ports           []corev1.ContainerPort
@@ -107,11 +117,93 @@ type controllerMicroserviceConfig struct {
 	db                 *cpv3.Database
 	events             *cpv3.Events
 	routerImage        string
+	natsImage          string
+	natsEnabled        bool
 	ecn                string
 	pidBaseDir         string
 	ecnViewerPort      int
 	ecnViewerURL       string
 	logLevel           string
+	vault              *cpv3.Vault
+}
+
+func buildControllerSecrets(namespace string, cfg *controllerMicroserviceConfig) []corev1.Secret {
+	secrets := []corev1.Secret{
+		{
+			Type: corev1.SecretTypeOpaque,
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      controllerDBCredentialsSecretName,
+			},
+			StringData: map[string]string{
+				controllerDBDBNameSecretKey:   cfg.db.DatabaseName,
+				controllerDBHostSecretKey:     cfg.db.Host,
+				controllerDBPortSecretKey:     strconv.Itoa(cfg.db.Port),
+				controllerDBUserSecretKey:     cfg.db.User,
+				controllerDBPasswordSecretKey: cfg.db.Password,
+				controllerDBSSLSecretKey:      getSSLValue(cfg.db.SSL),
+				controllerDBCACertSecretKey:   getCAValue(cfg.db.CA),
+			},
+		},
+		{
+			Type: corev1.SecretTypeOpaque,
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      controlllerAuthCredentialsSecretName,
+			},
+			StringData: map[string]string{
+				controlllerAuthUrlSecretKey:                    cfg.auth.URL,
+				controlllerAuthRealmSecretKey:                  cfg.auth.Realm,
+				controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,
+				controlllerAuthSSLSecretKey:                    cfg.auth.SSL,
+				controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,
+				controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
+				controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,
+			},
+		},
+	}
+	if cfg.vault != nil {
+		if vaultSec := buildVaultCredentialsSecret(namespace, cfg.vault); vaultSec != nil {
+			secrets = append(secrets, *vaultSec)
+		}
+	}
+	return secrets
+}
+
+// buildVaultCredentialsSecret returns a Secret containing provider-specific vault config for the controller. Keys match what we use in SecretKeyRef (address, token, mount for hashicorp; etc.).
+func buildVaultCredentialsSecret(namespace string, v *cpv3.Vault) *corev1.Secret {
+	if v == nil {
+		return nil
+	}
+	data := make(map[string]string)
+	switch {
+	case v.Hashicorp != nil:
+		data["address"] = v.Hashicorp.Address
+		data["token"] = v.Hashicorp.Token
+		data["mount"] = v.Hashicorp.Mount
+	case v.Aws != nil:
+		data["region"] = v.Aws.Region
+		data["accessKeyId"] = v.Aws.AccessKeyId
+		data["accessKey"] = v.Aws.AccessKey
+	case v.Azure != nil:
+		data["url"] = v.Azure.URL
+		data["tenantId"] = v.Azure.TenantId
+		data["clientId"] = v.Azure.ClientId
+		data["clientSecret"] = v.Azure.ClientSecret
+	case v.Google != nil:
+		data["projectId"] = v.Google.ProjectId
+		data["credentials"] = v.Google.Credentials
+	default:
+		return nil
+	}
+	return &corev1.Secret{
+		Type: corev1.SecretTypeOpaque,
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      controllerVaultCredentialsSecretName,
+		},
+		StringData: data,
+	}
 }
 
 func filterControllerConfig(cfg *controllerMicroserviceConfig) {
@@ -121,6 +213,14 @@ func filterControllerConfig(cfg *controllerMicroserviceConfig) {
 
 	if cfg.image == "" {
 		cfg.image = util.GetControllerImage()
+	}
+
+	if cfg.routerImage == "" {
+		cfg.routerImage = util.GetRouterImage()
+	}
+
+	if cfg.natsImage == "" {
+		cfg.natsImage = util.GetNatsImage()
 	}
 
 	if cfg.serviceType == "" {
@@ -206,40 +306,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				},
 			},
 		},
-		secrets: []corev1.Secret{
-			{
-				Type: corev1.SecretTypeOpaque,
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      controllerDBCredentialsSecretName,
-				},
-				StringData: map[string]string{
-					controllerDBDBNameSecretKey:   cfg.db.DatabaseName,
-					controllerDBHostSecretKey:     cfg.db.Host,
-					controllerDBPortSecretKey:     strconv.Itoa(cfg.db.Port),
-					controllerDBUserSecretKey:     cfg.db.User,
-					controllerDBPasswordSecretKey: cfg.db.Password,
-					controllerDBSSLSecretKey:      getSSLValue(cfg.db.SSL),
-					controllerDBCACertSecretKey:   getCAValue(cfg.db.CA),
-				},
-			},
-			{
-				Type: corev1.SecretTypeOpaque,
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: namespace,
-					Name:      controlllerAuthCredentialsSecretName,
-				},
-				StringData: map[string]string{
-					controlllerAuthUrlSecretKey:                    cfg.auth.URL,
-					controlllerAuthRealmSecretKey:                  cfg.auth.Realm,
-					controlllerAuthRealmKeySecretKey:               cfg.auth.RealmKey,
-					controlllerAuthSSLSecretKey:                    cfg.auth.SSL,
-					controlllerAuthControllerClientSecretKey:       cfg.auth.ControllerClient,
-					controlllerAuthControllerClientSecretSecretKey: cfg.auth.ControllerSecret,
-					controlllerAuthViewerClientSecretKey:           cfg.auth.ViewerClient,
-				},
-			},
-		},
+		secrets: buildControllerSecrets(namespace, cfg),
 		volumes: []corev1.Volume{},
 		securityContext: &corev1.PodSecurityContext{
 			RunAsUser:  ptr.To[int64](10000), // UID
@@ -445,6 +512,18 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 						Value: cfg.routerImage,
 					},
 					{
+						Name:  "NATS_ENABLED",
+						Value: strconv.FormatBool(cfg.natsEnabled),
+					},
+					{
+						Name:  "NATS_IMAGE_1",
+						Value: cfg.natsImage,
+					},
+					{
+						Name:  "NATS_IMAGE_2",
+						Value: cfg.natsImage,
+					},
+					{
 						Name:  "ECN_NAME",
 						Value: cfg.ecn,
 					},
@@ -570,6 +649,58 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 		}
 	}
 
+	// Vault: optional. When configured, set VAULT_* env from spec and from operator-created Secret (provider-specific).
+	if cfg.vault != nil {
+		enabled := true
+		if cfg.vault.Enabled != nil {
+			enabled = *cfg.vault.Enabled
+		}
+		msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+			Name:  "VAULT_ENABLED",
+			Value: strconv.FormatBool(enabled),
+		})
+		if cfg.vault.Provider != "" {
+			msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+				Name:  "VAULT_PROVIDER",
+				Value: cfg.vault.Provider,
+			})
+		}
+		if cfg.vault.BasePath != "" {
+			basePath := strings.ReplaceAll(cfg.vault.BasePath, "$namespace", namespace)
+			msvc.containers[0].env = append(msvc.containers[0].env, corev1.EnvVar{
+				Name:  "VAULT_BASE_PATH",
+				Value: basePath,
+			})
+		}
+		// Provider-specific env vars from the operator-created Secret (keys: address, token, mount; region, accessKeyId, accessKey; etc.)
+		switch {
+		case cfg.vault.Hashicorp != nil:
+			msvc.containers[0].env = append(msvc.containers[0].env,
+				corev1.EnvVar{Name: "VAULT_HASHICORP_ADDRESS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "address"}}},
+				corev1.EnvVar{Name: "VAULT_HASHICORP_TOKEN", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "token"}}},
+				corev1.EnvVar{Name: "VAULT_HASHICORP_MOUNT", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "mount"}}},
+			)
+		case cfg.vault.Aws != nil:
+			msvc.containers[0].env = append(msvc.containers[0].env,
+				corev1.EnvVar{Name: "VAULT_AWS_REGION", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "region"}}},
+				corev1.EnvVar{Name: "VAULT_AWS_ACCESS_KEY_ID", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "accessKeyId"}}},
+				corev1.EnvVar{Name: "VAULT_AWS_ACCESS_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "accessKey"}}},
+			)
+		case cfg.vault.Azure != nil:
+			msvc.containers[0].env = append(msvc.containers[0].env,
+				corev1.EnvVar{Name: "VAULT_AZURE_URL", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "url"}}},
+				corev1.EnvVar{Name: "VAULT_AZURE_TENANT_ID", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "tenantId"}}},
+				corev1.EnvVar{Name: "VAULT_AZURE_CLIENT_ID", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "clientId"}}},
+				corev1.EnvVar{Name: "VAULT_AZURE_CLIENT_SECRET", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "clientSecret"}}},
+			)
+		case cfg.vault.Google != nil:
+			msvc.containers[0].env = append(msvc.containers[0].env,
+				corev1.EnvVar{Name: "VAULT_GOOGLE_PROJECT_ID", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "projectId"}}},
+				corev1.EnvVar{Name: "VAULT_GOOGLE_CREDENTIALS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: controllerVaultCredentialsSecretName}, Key: "credentials"}}},
+			)
+		}
+	}
+
 	return msvc
 }
 
@@ -595,15 +726,15 @@ func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
 	}
 
 	if cfg.siteSecret == "" {
-		cfg.siteSecret = "pot-router-site-server"
+		cfg.siteSecret = "router-site-server"
 	}
 
 	if cfg.localSecret == "" {
-		cfg.localSecret = "pot-router-local-server"
+		cfg.localSecret = "router-local-server"
 	}
 
 	if cfg.siteCA == "" {
-		cfg.siteCA = "pot-site-ca"
+		cfg.siteCA = "router-site-ca"
 	}
 
 	if cfg.localCA == "" {
@@ -705,10 +836,10 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 		},
 		volumes: []corev1.Volume{
 			{
-				Name: "pot-router-config",
+				Name: "iofog-router-config",
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "pot-router"},
+						LocalObjectReference: corev1.LocalObjectReference{Name: "iofog-router"},
 						Items: []corev1.KeyToPath{
 							{Key: "skrouterd.json", Path: "skrouterd.json"},
 						},
@@ -716,18 +847,18 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 			},
 			{
-				Name: "pot-router-site-server",
+				Name: "router-site-server",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: "pot-router-site-server",
+						SecretName: "router-site-server",
 					},
 				},
 			},
 			{
-				Name: "pot-router-local-server",
+				Name: "router-local-server",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: "pot-router-local-server",
+						SecretName: "router-local-server",
 					},
 				},
 			},
@@ -838,16 +969,16 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{
-						Name:      "pot-router-config",
+						Name:      "iofog-router-config",
 						MountPath: "/tmp",
 					},
 					{
-						Name:      "pot-router-site-server",
-						MountPath: "/etc/skupper-router-certs/pot-router-site-server",
+						Name:      "router-site-server",
+						MountPath: "/etc/skupper-router-certs/router-site-server",
 					},
 					{
-						Name:      "pot-router-local-server",
-						MountPath: "/etc/skupper-router-certs/pot-router-local-server",
+						Name:      "router-local-server",
+						MountPath: "/etc/skupper-router-certs/router-local-server",
 					},
 				},
 			},
@@ -872,6 +1003,146 @@ func newRouterMicroservices(cfg routerMicroserviceConfig) []*microservice {
 	}
 
 	return microservices
+}
+
+type natsMicroserviceConfig struct {
+	image              string
+	imagePullSecret    string
+	replicas           int32
+	storageSize        string
+	storageClassName   string
+	headlessPorts      bool
+	jetStreamKeySecret string
+	serviceType        string
+	serviceAnnotations map[string]string
+}
+
+func newNatsMicroservice(cfg natsMicroserviceConfig) *microservice {
+	// Headless: cluster port only (StatefulSet pod discovery: nats-0.nats-headless, etc.).
+	headlessPorts := []corev1.ServicePort{
+		{Name: "cluster", Port: int32(nats.DefaultClusterPort), TargetPort: intstr.FromInt(nats.DefaultClusterPort)},
+	}
+	if cfg.headlessPorts {
+		headlessPorts = append(headlessPorts,
+			corev1.ServicePort{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
+			corev1.ServicePort{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
+		)
+	}
+	// Client-facing: cluster port so controller/agents can configure NATS routes (e.g. agent node in server mode).
+	clientPorts := []corev1.ServicePort{
+		{Name: "cluster", Port: int32(nats.DefaultClusterPort), TargetPort: intstr.FromInt(nats.DefaultClusterPort)},
+		{Name: "leaf", Port: int32(nats.DefaultLeafPort), TargetPort: intstr.FromInt(nats.DefaultLeafPort)},
+		{Name: "mqtt", Port: int32(nats.DefaultMqttPort), TargetPort: intstr.FromInt(nats.DefaultMqttPort)},
+	}
+	if !cfg.headlessPorts {
+		clientPorts = append(clientPorts,
+			corev1.ServicePort{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
+			corev1.ServicePort{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
+		)
+	}
+
+	storageQuantity := resource.MustParse(cfg.storageSize)
+	if storageQuantity.IsZero() {
+		storageQuantity = resource.MustParse(nats.DefaultStorageSizePVC)
+	}
+	pvcSpec := corev1.PersistentVolumeClaimSpec{
+		AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+		Resources:   corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: storageQuantity}},
+	}
+	if cfg.storageClassName != "" {
+		pvcSpec.StorageClassName = ptr.To(cfg.storageClassName)
+	}
+
+	return &microservice{
+		name:                   "nats",
+		isStatefulSet:          true,
+		statefulSetServiceName: nats.HeadlessServiceName,
+		volumeClaimTemplates:   []corev1.PersistentVolumeClaim{{ObjectMeta: metav1.ObjectMeta{Name: "js-data"}, Spec: pvcSpec}},
+		imagePullSecret:        cfg.imagePullSecret,
+		replicas:               cfg.replicas,
+		labels:                 map[string]string{"datasance.com/component": "nats"},
+		services: []service{
+			{name: nats.HeadlessServiceName, serviceType: "ClusterIP", headless: true, ports: headlessPorts},
+			{name: nats.ClientServiceName, serviceType: cfg.serviceType, serviceAnnotations: cfg.serviceAnnotations, trafficPolicy: getTrafficPolicy(cfg.serviceType), ports: clientPorts},
+		},
+		volumes: []corev1.Volume{
+			{Name: "config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: nats.ConfigMapName}}}},
+			{Name: "jwt", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: nats.JWTBundleCMName}}}},
+			{Name: "nats-site-server", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nats.NatsSiteServerSecret}}},
+			{Name: "nats-mqtt-server", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nats.NatsMqttServerSecret}}},
+			{Name: "jetstream-key", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: cfg.jetStreamKeySecret}}},
+			{Name: "sys-user-creds", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nats.HubSystemUserCredsSecret, Items: []corev1.KeyToPath{{Key: nats.HubSystemUserCredsDataKey, Path: "admin-hub.creds"}}}}},
+		},
+		containers: []container{
+			{
+				name:            "nats",
+				image:           cfg.image,
+				imagePullPolicy: "Always",
+				ports: []corev1.ContainerPort{
+					{Name: "client", ContainerPort: nats.DefaultServerPort},
+					{Name: "cluster", ContainerPort: nats.DefaultClusterPort},
+					{Name: "leaf", ContainerPort: nats.DefaultLeafPort},
+					{Name: "mqtt", ContainerPort: nats.DefaultMqttPort},
+					{Name: "monitor", ContainerPort: nats.DefaultHttpPort},
+				},
+				env: []corev1.EnvVar{
+					{Name: "NATS_CONF", Value: "/etc/nats/config/server.conf"},
+					{Name: "NATS_JWT_DIR", Value: "/etc/nats/jwt"},
+					{Name: "NATS_CREDS_DIR", Value: "/etc/nats/creds"},
+					{Name: "NATS_SYS_USER_CRED_PATH", Value: "/etc/nats/creds/admin-hub.creds"},
+					{Name: "NATS_SSL_DIR", Value: "/etc/nats/certs"},
+					{Name: "NATS_CERT_NAME", Value: "nats-site-server"},
+					{Name: "NATS_MQTT_CERT_NAME", Value: "nats-mqtt-server"},
+					{Name: "NATS_SERVER_PORT", Value: "4222"},
+					{Name: "NATS_CLUSTER_PORT", Value: "6222"},
+					{Name: "NATS_LEAF_PORT", Value: "7422"},
+					{Name: "NATS_MQTT_PORT", Value: "8883"},
+					{Name: "NATS_MONITOR_PORT", Value: "8222"},
+					{Name: "NATS_JETSTREAM_STORE_DIR", Value: "/home/runner/data"},
+					{Name: "NATS_HTTP_PORT", Value: "8222"},
+					{Name: "JETSTREAM_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: cfg.jetStreamKeySecret}, Key: "jsk"}}},
+					{Name: "JETSTREAM_PREV_KEY", Value: ""},
+					{Name: "SELFNAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+				},
+				volumeMounts: []corev1.VolumeMount{
+					{Name: "config", MountPath: "/etc/nats/config"},
+					{Name: "jwt", MountPath: "/etc/nats/jwt"},
+					{Name: "nats-site-server", MountPath: "/etc/nats/certs/nats-site-server"},
+					{Name: "nats-mqtt-server", MountPath: "/etc/nats/certs/nats-mqtt-server"},
+					{Name: "jetstream-key", MountPath: "/etc/nats/jetstream", ReadOnly: true},
+					{Name: "sys-user-creds", MountPath: "/etc/nats/creds", ReadOnly: true},
+					{Name: "js-data", MountPath: "/home/runner/data"},
+				},
+				readinessProbe: &corev1.Probe{
+					ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz?js-enabled-only=true", Port: intstr.FromInt32(nats.DefaultHttpPort)}},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					SuccessThreshold:    1,
+					FailureThreshold:    3,
+				},
+				livenessProbe: &corev1.Probe{
+					ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz?js-enabled-only=true", Port: intstr.FromInt32(nats.DefaultHttpPort)}},
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       30,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+				// startupProbe: &corev1.Probe{
+				// 	ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(nats.DefaultHttpPort)}},
+				// 	InitialDelaySeconds: 10,
+				// 	TimeoutSeconds:      5,
+				// 	PeriodSeconds:       10,
+				// 	SuccessThreshold:    1,
+				// 	FailureThreshold:    90,
+				// },
+			},
+		},
+		rbacRules: []rbacv1.PolicyRule{
+			{Verbs: []string{"get", "list", "watch"}, APIGroups: []string{""}, Resources: []string{"configmaps", "secrets"}},
+		},
+	}
 }
 
 // newRouterMicroserviceWithName creates a router microservice with a custom name
@@ -907,10 +1178,10 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 		},
 		volumes: []corev1.Volume{
 			{
-				Name: "pot-router-config",
+				Name: "iofog-router-config",
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "pot-router"},
+						LocalObjectReference: corev1.LocalObjectReference{Name: "iofog-router"},
 						Items: []corev1.KeyToPath{
 							{Key: "skrouterd.json", Path: "skrouterd.json"},
 						},
@@ -918,18 +1189,18 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 				},
 			},
 			{
-				Name: "pot-router-site-server",
+				Name: "router-site-server",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: "pot-router-site-server",
+						SecretName: "router-site-server",
 					},
 				},
 			},
 			{
-				Name: "pot-router-local-server",
+				Name: "router-local-server",
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: "pot-router-local-server",
+						SecretName: "router-local-server",
 					},
 				},
 			},
@@ -1028,16 +1299,16 @@ func newRouterMicroserviceWithName(cfg routerMicroserviceConfig, name string) *m
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{
-						Name:      "pot-router-config",
+						Name:      "iofog-router-config",
 						MountPath: "/tmp",
 					},
 					{
-						Name:      "pot-router-site-server",
-						MountPath: "/etc/skupper-router-certs/pot-router-site-server",
+						Name:      "router-site-server",
+						MountPath: "/etc/skupper-router-certs/router-site-server",
 					},
 					{
-						Name:      "pot-router-local-server",
-						MountPath: "/etc/skupper-router-certs/pot-router-local-server",
+						Name:      "router-local-server",
+						MountPath: "/etc/skupper-router-certs/router-local-server",
 					},
 				},
 			},
