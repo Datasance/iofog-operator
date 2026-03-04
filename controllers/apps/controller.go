@@ -159,14 +159,15 @@ func (r *ApplicationReconciler) deploymentForApp(app *appsv3.Application) (*apps
 		return nil, err
 	}
 
-	routes, err := json.Marshal(app.Spec.Routes)
-	if err != nil {
-		return nil, err
-	}
-
 	annotations := map[string]string{
 		"microservices": string(microservices),
-		"routes":        string(routes),
+	}
+	if app.Spec.NatsConfig != nil {
+		natsConfig, err := json.Marshal(app.Spec.NatsConfig)
+		if err != nil {
+			return nil, err
+		}
+		annotations["natsConfig"] = string(natsConfig)
 	}
 
 	containers := make([]corev1.Container, len(app.Spec.Microservices))

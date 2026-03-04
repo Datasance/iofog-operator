@@ -30,9 +30,9 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -76,10 +76,10 @@ func main() {
 		LeaderElection:   enableLeaderElection,
 		LeaderElectionID: "pot.datasance",
 		Metrics:          server.Options{BindAddress: metricsAddr},
-		Cache:            cache.Options{
-						  DefaultNamespaces: map[string]cache.Config{
-						  getWatchNamespace(): {},
-						  },
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				getWatchNamespace(): {},
+			},
 		},
 		// WebhookServer:    wb.NewServer(webhook.Options{Port: 9443}),
 	})

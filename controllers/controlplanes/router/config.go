@@ -55,28 +55,28 @@ const rawRouterConfig = `
     [
         "sslProfile",
         {
-            "name": "pot-router-site-server",
-            "certFile": "/etc/skupper-router-certs/pot-router-site-server/tls.crt",
-            "privateKeyFile": "/etc/skupper-router-certs/pot-router-site-server/tls.key",
-            "caCertFile": "/etc/skupper-router-certs/pot-router-site-server/ca.crt"
+            "name": "router-site-server",
+            "certFile": "/etc/skupper-router-certs/router-site-server/tls.crt",
+            "privateKeyFile": "/etc/skupper-router-certs/router-site-server/tls.key",
+            "caCertFile": "/etc/skupper-router-certs/router-site-server/ca.crt"
         }
     ],
     [
         "sslProfile",
         {
-            "name": "pot-router-local-server",
-            "certFile": "/etc/skupper-router-certs/pot-router-local-server/tls.crt",
-            "privateKeyFile": "/etc/skupper-router-certs/pot-router-local-server/tls.key",
-            "caCertFile": "/etc/skupper-router-certs/pot-router-local-server/ca.crt"
+            "name": "router-local-server",
+            "certFile": "/etc/skupper-router-certs/router-local-server/tls.crt",
+            "privateKeyFile": "/etc/skupper-router-certs/router-local-server/tls.key",
+            "caCertFile": "/etc/skupper-router-certs/router-local-server/ca.crt"
         }
     ],
     [
         "listener",
         {
-            "name": "pot-router-edge",
+            "name": "iofog-router-edge",
             "role": "edge",
             "port": <EDGE_PORT>,
-            "sslProfile": "pot-router-site-server",
+            "sslProfile": "router-site-server",
             "saslMechanisms": "EXTERNAL",
             "authenticatePeer": true
         }
@@ -94,7 +94,7 @@ const rawRouterConfig = `
         {
             "name": "amqps",
             "port": <MESSAGE_PORT>,
-            "sslProfile": "pot-router-local-server",
+            "sslProfile": "router-local-server",
             "saslMechanisms": "EXTERNAL",
             "authenticatePeer": true
         }
@@ -114,10 +114,10 @@ const rawRouterConfig = `
     [
         "listener",
         {
-            "name": "pot-router-inter-router",
+            "name": "iofog-router-inter-router",
             "role": "inter-router",
             "port": <INTERIOR_PORT>,
-            "sslProfile": "pot-router-site-server",
+            "sslProfile": "router-site-server",
             "saslMechanisms": "EXTERNAL",
             "authenticatePeer": true
         }

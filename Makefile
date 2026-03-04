@@ -1,9 +1,10 @@
 OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
-VERSION = $(shell cat PROJECT | grep "version:" | sed "s/^version: //g")
+VERSION = $(shell grep "^version:" PROJECT | head -1 | sed 's/^version: *//' | tr -d '"' | tr -d ' ')
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).routerTag=3.6.0
 LDFLAGS += -X $(PREFIX).controllerTag=3.6.0
+LDFLAGS += -X $(PREFIX).natsTag=2.12.4
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
 export CGO_ENABLED ?= 0
@@ -14,11 +15,18 @@ endif
 
 # Image URL to use all building/pushing image targets
 REGISTRY ?= ghcr.io/datasance
-VERSION_TAG ?= 3.6.0
-IMG ?= operator:$(VERSION_TAG)
-BUNDLE_IMG ?= operator-bundle:$(VERSION_TAG)
+VERSION_TAG ?= 3.7.0
+IMG ?= $(REGISTRY)/operator:$(VERSION_TAG)
+BUNDLE_IMG ?= $(REGISTRY)/operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions=v1,allowDangerousTypes=true"
+
+# Local testing (no image build)
+KUBECONFIG ?= $(HOME)/.kube/config
+TEST_NAMESPACE ?= iofog-test
+CR_PATH ?= config/cr/
+KUBECTL ?= kubectl
+export KUBECONFIG
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -40,14 +48,33 @@ build: fmt gen ## Build operator binary
 	GOARCH=$(GOARCH) GOOS=$(GOOS) go build $(GOARGS) -o bin/iofog-operator main.go
 
 install: manifests kustomize ## Install CRDs into a cluster
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
 
 uninstall: manifests kustomize ## Uninstall CRDs from a cluster
-	$(KUSTOMIZE) build config/crd | kubectl delete -f -
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete -f -
 
 deploy: manifests kustomize ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | kubectl apply -f -
+	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/datasance/operator=$(IMG)
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+
+.PHONY: local-prep
+local-prep: install build ## Install CRDs and build operator for local testing (uses KUBECONFIG)
+
+.PHONY: create-namespace
+create-namespace: ## Create TEST_NAMESPACE if it does not exist (uses KUBECONFIG)
+	$(KUBECTL) get namespace $(TEST_NAMESPACE) >/dev/null 2>&1 || $(KUBECTL) create namespace $(TEST_NAMESPACE)
+
+.PHONY: deploy-cr
+deploy-cr: create-namespace ## Deploy CR(s) from CR_PATH into TEST_NAMESPACE (uses KUBECONFIG)
+	$(KUSTOMIZE) build $(CR_PATH) | $(KUBECTL) apply -f - -n $(TEST_NAMESPACE)
+
+.PHONY: run
+run: build ## Run operator locally (uses KUBECONFIG, optional WATCH_NAMESPACE=TEST_NAMESPACE)
+	WATCH_NAMESPACE=$(TEST_NAMESPACE) ./bin/iofog-operator
+
+.PHONY: test-local
+test-local: local-prep deploy-cr ## Install CRDs, build operator, deploy CR; then run: make run
+	@echo "Run the operator in another terminal: make run"
 
 manifests: gen ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
@@ -133,8 +160,8 @@ endif
 .PHONY: bundle
 bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/datasance/operator=$(IMG)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION_TAG) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 
 

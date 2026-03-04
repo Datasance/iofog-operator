@@ -51,10 +51,13 @@ func mergeLabels(standard, existing map[string]string) map[string]string {
 	return merged
 }
 
-// getComponentFromMicroservice returns the component name for labeling ("controller" or "router").
+// getComponentFromMicroservice returns the component name for labeling ("controller", "router", or "nats").
 func getComponentFromMicroservice(ms *microservice) string {
 	if ms.name == "controller" {
 		return "controller"
+	}
+	if ms.name == "nats" {
+		return "nats"
 	}
 	return "router"
 }
@@ -75,6 +78,9 @@ func newServices(namespace, instanceName string, ms *microservice) (svcs []*core
 				LoadBalancerIP:        msvcSvc.loadBalancerAddr,
 				Selector:              labels,
 			},
+		}
+		if msvcSvc.headless {
+			svc.Spec.ClusterIP = corev1.ClusterIPNone
 		}
 		// Add ports
 		for _, port := range msvcSvc.ports {
@@ -211,6 +217,7 @@ func newDeployment(namespace, instanceName string, ms *microservice) *appsv1.Dep
 			Resources:       msInitCont.resources,
 			ReadinessProbe:  msInitCont.readinessProbe,
 			LivenessProbe:   msInitCont.livenessProbe,
+			StartupProbe:    msInitCont.startupProbe,
 			VolumeMounts:    msInitCont.volumeMounts,
 			ImagePullPolicy: corev1.PullPolicy(msInitCont.imagePullPolicy),
 		}
@@ -231,6 +238,7 @@ func newDeployment(namespace, instanceName string, ms *microservice) *appsv1.Dep
 			Resources:       msCont.resources,
 			ReadinessProbe:  msCont.readinessProbe,
 			LivenessProbe:   msCont.livenessProbe,
+			StartupProbe:    msCont.startupProbe,
 			VolumeMounts:    msCont.volumeMounts,
 			ImagePullPolicy: corev1.PullPolicy(msCont.imagePullPolicy),
 		}
@@ -238,6 +246,78 @@ func newDeployment(namespace, instanceName string, ms *microservice) *appsv1.Dep
 	}
 
 	return dep
+}
+
+// newStatefulSet builds a StatefulSet from a microservice (used when ms.isStatefulSet is true, e.g. NATS).
+func newStatefulSet(namespace, instanceName string, ms *microservice) *appsv1.StatefulSet {
+	labels := mergeLabels(getStandardLabels(getComponentFromMicroservice(ms), instanceName), ms.labels)
+
+	st := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ms.name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName: ms.statefulSetServiceName,
+			Replicas:    &ms.replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels, Annotations: ms.podTemplateAnnotations},
+				Spec: corev1.PodSpec{
+					Volumes:         ms.volumes,
+					SecurityContext: ms.securityContext,
+				},
+			},
+			VolumeClaimTemplates: ms.volumeClaimTemplates,
+		},
+	}
+	if ms.imagePullSecret != "" {
+		st.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: ms.imagePullSecret}}
+	}
+	// ServiceAccountName if needed (NATS may use default)
+	if ms.name != "" {
+		st.Spec.Template.Spec.ServiceAccountName = ms.name
+	}
+
+	for i := range ms.initContainers {
+		c := &ms.initContainers[i]
+		st.Spec.Template.Spec.InitContainers = append(st.Spec.Template.Spec.InitContainers, corev1.Container{
+			Name:            c.name,
+			Image:           c.image,
+			Command:         c.command,
+			Args:            c.args,
+			Ports:           c.ports,
+			Env:             c.env,
+			Resources:       c.resources,
+			ReadinessProbe:  c.readinessProbe,
+			LivenessProbe:   c.livenessProbe,
+			StartupProbe:    c.startupProbe,
+			VolumeMounts:    c.volumeMounts,
+			ImagePullPolicy: corev1.PullPolicy(c.imagePullPolicy),
+		})
+	}
+	for i := range ms.containers {
+		c := &ms.containers[i]
+		st.Spec.Template.Spec.Containers = append(st.Spec.Template.Spec.Containers, corev1.Container{
+			Name:            c.name,
+			Image:           c.image,
+			Command:         c.command,
+			Args:            c.args,
+			Ports:           c.ports,
+			Env:             c.env,
+			Resources:       c.resources,
+			ReadinessProbe:  c.readinessProbe,
+			LivenessProbe:   c.livenessProbe,
+			StartupProbe:    c.startupProbe,
+			VolumeMounts:    c.volumeMounts,
+			ImagePullPolicy: corev1.PullPolicy(c.imagePullPolicy),
+		})
+	}
+
+	return st
 }
 
 func newServiceAccount(namespace, instanceName string, ms *microservice) *corev1.ServiceAccount {
@@ -289,7 +369,7 @@ func newRouterConfigMap(namespace, instanceName string) *corev1.ConfigMap {
 	labels := getStandardLabels("router", instanceName)
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pot-router",
+			Name:      "iofog-router",
 			Namespace: namespace,
 			Labels:    labels,
 		},

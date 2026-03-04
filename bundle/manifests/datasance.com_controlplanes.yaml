@@ -1,9 +1,8 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.14.0
   creationTimestamp: null
   name: controlplanes.datasance.com
 spec:
@@ -79,10 +78,10 @@ spec:
                     type: integer
                   ecnViewerUrl:
                     type: string
-                  logLevel:
-                    type: string
                   https:
                     type: boolean
+                  logLevel:
+                    type: string
                   pidBaseDir:
                     type: string
                   secretName:
@@ -91,6 +90,8 @@ spec:
               database:
                 description: Database for ioFog Controller
                 properties:
+                  ca:
+                    type: string
                   databaseName:
                     type: string
                   host:
@@ -101,6 +102,8 @@ spec:
                     type: integer
                   provider:
                     type: string
+                  ssl:
+                    type: boolean
                   user:
                     type: string
                 required:
@@ -111,11 +114,28 @@ spec:
                 - provider
                 - user
                 type: object
+              events:
+                description: |-
+                  // Router contains runtime configuration for ioFog Router
+                  Router Router `json:"router,omitempty"`
+                  Events contains runtime configuration for ioFog Controller events
+                properties:
+                  auditEnabled:
+                    type: boolean
+                  captureIpAddress:
+                    type: boolean
+                  cleanupInterval:
+                    type: integer
+                  retentionDays:
+                    type: integer
+                type: object
               images:
                 description: Images specifies which containers to run for each component
                   of the ControlPlane
                 properties:
                   controller:
+                    type: string
+                  nats:
                     type: string
                   pullSecret:
                     type: string
@@ -139,6 +159,24 @@ spec:
                       secretName:
                         type: string
                     type: object
+                  nats:
+                    description: |-
+                      NatsIngress specifies the external address and ports for NATS hub registration (required when using ingress).
+                      Ports are optional and default to: server 4222, cluster 6222, leaf 7422, mqtt 8883, http 8222.
+                    properties:
+                      address:
+                        type: string
+                      clusterPort:
+                        type: integer
+                      httpPort:
+                        type: integer
+                      leafPort:
+                        type: integer
+                      mqttPort:
+                        type: integer
+                      serverPort:
+                        type: integer
+                    type: object
                   router:
                     properties:
                       address:
@@ -151,12 +189,42 @@ spec:
                         type: integer
                     type: object
                 type: object
+              nats:
+                description: Nats contains NATS hub configuration (StatefulSet, JetStream,
+                  etc.). When omitted, NATS is enabled with defaults.
+                properties:
+                  enabled:
+                    description: Enabled toggles NATS deployment. When omitted, treated
+                      as true.
+                    type: boolean
+                  jetStream:
+                    description: JetStream storage and memory limits.
+                    properties:
+                      memoryStoreSize:
+                        description: MemoryStoreSize is used for max_memory_store
+                          in server.conf only (default 1Gi).
+                        type: string
+                      storageClassName:
+                        description: StorageClassName for the JetStream PVC (optional).
+                        type: string
+                      storageSize:
+                        description: StorageSize is used for the PVC size and max_file_store
+                          in server.conf (default 10Gi).
+                        type: string
+                    type: object
+                type: object
               replicas:
                 description: Replicas of ioFog Controller should be 1 unless an external
                   DB is configured
                 properties:
                   controller:
                     format: int32
+                    type: integer
+                  nats:
+                    description: Nats is the number of NATS server replicas (default
+                      2, min 2 when NATS enabled).
+                    format: int32
+                    minimum: 2
                     type: integer
                 type: object
               services:
@@ -171,6 +239,46 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
+                      type:
+                        type: string
+                    type: object
+                  nats:
+                    properties:
+                      address:
+                        type: string
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
+                      type:
+                        type: string
+                    type: object
+                  natsServer:
+                    properties:
+                      address:
+                        type: string
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
                       type:
                         type: string
                     type: object
@@ -182,9 +290,75 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
                       type:
                         type: string
                     type: object
+                type: object
+              vault:
+                description: Vault is optional. When set, the Controller uses the
+                  configured vault provider for secrets. Operator creates a Secret
+                  from provider-specific config and injects env vars.
+                properties:
+                  aws:
+                    description: Aws provider config. Set when provider is aws or
+                      aws-secrets-manager.
+                    properties:
+                      accessKey:
+                        type: string
+                      accessKeyId:
+                        type: string
+                      region:
+                        type: string
+                    type: object
+                  azure:
+                    description: Azure provider config. Set when provider is azure
+                      or azure-key-vault.
+                    properties:
+                      clientId:
+                        type: string
+                      clientSecret:
+                        type: string
+                      tenantId:
+                        type: string
+                      url:
+                        type: string
+                    type: object
+                  basePath:
+                    description: BasePath for secrets in vault; $namespace is replaced
+                      with the ControlPlane namespace (e.g. pot/$namespace/secrets).
+                    type: string
+                  enabled:
+                    type: boolean
+                  google:
+                    description: Google provider config. Set when provider is google
+                      or google-secret-manager.
+                    properties:
+                      credentials:
+                        type: string
+                      projectId:
+                        type: string
+                    type: object
+                  hashicorp:
+                    description: Hashicorp (and openbao/vault) provider config. Set
+                      when provider is hashicorp, openbao, or vault.
+                    properties:
+                      address:
+                        type: string
+                      mount:
+                        type: string
+                      token:
+                        type: string
+                    type: object
+                  provider:
+                    description: 'Provider: hashicorp, openbao, vault, aws, aws-secrets-manager,
+                      azure, azure-key-vault, google, google-secret-manager.'
+                    type: string
                 type: object
             required:
             - auth
@@ -277,5 +451,5 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
