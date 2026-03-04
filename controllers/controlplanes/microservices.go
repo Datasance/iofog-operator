@@ -85,6 +85,8 @@ type microservice struct {
 	isStatefulSet          bool
 	statefulSetServiceName string // headless service name for StatefulSet (e.g. nats-headless)
 	volumeClaimTemplates   []corev1.PersistentVolumeClaim
+	// podTemplateAnnotations applied to StatefulSet pod template (e.g. kubectl.kubernetes.io/restartedAt for rollout)
+	podTemplateAnnotations map[string]string
 }
 
 type container struct {
@@ -103,28 +105,29 @@ type container struct {
 }
 
 type controllerMicroserviceConfig struct {
-	controllerName     string
-	replicas           int32
-	image              string
-	imagePullSecret    string
-	serviceType        string
-	serviceAnnotations map[string]string
-	https              *bool
-	scheme             string
-	secretName         string
-	loadBalancerAddr   string
-	auth               *cpv3.Auth
-	db                 *cpv3.Database
-	events             *cpv3.Events
-	routerImage        string
-	natsImage          string
-	natsEnabled        bool
-	ecn                string
-	pidBaseDir         string
-	ecnViewerPort      int
-	ecnViewerURL       string
-	logLevel           string
-	vault              *cpv3.Vault
+	controllerName        string
+	replicas              int32
+	image                 string
+	imagePullSecret       string
+	serviceType           string
+	serviceAnnotations    map[string]string
+	externalTrafficPolicy string
+	https                 *bool
+	scheme                string
+	secretName            string
+	loadBalancerAddr      string
+	auth                  *cpv3.Auth
+	db                    *cpv3.Database
+	events                *cpv3.Events
+	routerImage           string
+	natsImage             string
+	natsEnabled           bool
+	ecn                   string
+	pidBaseDir            string
+	ecnViewerPort         int
+	ecnViewerURL          string
+	logLevel              string
+	vault                 *cpv3.Vault
 }
 
 func buildControllerSecrets(namespace string, cfg *controllerMicroserviceConfig) []corev1.Secret {
@@ -280,6 +283,17 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				APIGroups: []string{""},
 				Resources: []string{"services"},
 			},
+			{
+				Verbs:     []string{"get", "list", "watch"},
+				APIGroups: []string{"apps"},
+				Resources: []string{"statefulsets"},
+			},
+			{
+				Verbs:         []string{"update", "patch"},
+				APIGroups:     []string{"apps"},
+				Resources:     []string{"statefulsets"},
+				ResourceNames: []string{"nats"},
+			},
 		},
 		imagePullSecret: cfg.imagePullSecret,
 		replicas:        cfg.replicas,
@@ -288,7 +302,7 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 				name:               "controller",
 				serviceType:        cfg.serviceType,
 				serviceAnnotations: cfg.serviceAnnotations,
-				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType, cfg.externalTrafficPolicy),
 				loadBalancerAddr:   cfg.loadBalancerAddr,
 				ports: []corev1.ServicePort{
 					{
@@ -705,15 +719,16 @@ func newControllerMicroservice(namespace string, cfg *controllerMicroserviceConf
 }
 
 type routerMicroserviceConfig struct {
-	image              string
-	imagePullSecret    string
-	serviceType        string
-	serviceAnnotations map[string]string
-	siteCA             string
-	localCA            string
-	siteSecret         string
-	localSecret        string
-	ha                 bool
+	image                 string
+	imagePullSecret       string
+	serviceType           string
+	serviceAnnotations    map[string]string
+	externalTrafficPolicy string
+	siteCA                string
+	localCA               string
+	siteSecret            string
+	localSecret           string
+	ha                    bool
 }
 
 func filterRouterConfig(cfg routerMicroserviceConfig) routerMicroserviceConfig {
@@ -764,7 +779,7 @@ func newRouterMicroservice(cfg routerMicroserviceConfig) *microservice {
 				name:               "router",
 				serviceType:        cfg.serviceType,
 				serviceAnnotations: cfg.serviceAnnotations,
-				trafficPolicy:      getTrafficPolicy(cfg.serviceType),
+				trafficPolicy:      getTrafficPolicy(cfg.serviceType, cfg.externalTrafficPolicy),
 				ports: []corev1.ServicePort{
 					{
 						Name:       "router-message",
@@ -1006,39 +1021,39 @@ func newRouterMicroservices(cfg routerMicroserviceConfig) []*microservice {
 }
 
 type natsMicroserviceConfig struct {
-	image              string
-	imagePullSecret    string
-	replicas           int32
-	storageSize        string
-	storageClassName   string
-	headlessPorts      bool
-	jetStreamKeySecret string
-	serviceType        string
-	serviceAnnotations map[string]string
+	image                       string
+	imagePullSecret             string
+	replicas                    int32
+	storageSize                 string
+	storageClassName            string
+	jetStreamKeySecret          string
+	serviceType                 string
+	serviceAnnotations          map[string]string
+	externalTrafficPolicy       string
+	serverServiceType           string
+	serverServiceAnnotations    map[string]string
+	serverExternalTrafficPolicy string
 }
 
 func newNatsMicroservice(cfg natsMicroserviceConfig) *microservice {
-	// Headless: cluster port only (StatefulSet pod discovery: nats-0.nats-headless, etc.).
+	// Headless: all ports (StatefulSet pod discovery: nats-0.nats-headless, etc.).
 	headlessPorts := []corev1.ServicePort{
 		{Name: "cluster", Port: int32(nats.DefaultClusterPort), TargetPort: intstr.FromInt(nats.DefaultClusterPort)},
+		{Name: "leaf", Port: int32(nats.DefaultLeafPort), TargetPort: intstr.FromInt(nats.DefaultLeafPort)},
+		{Name: "mqtt", Port: int32(nats.DefaultMqttPort), TargetPort: intstr.FromInt(nats.DefaultMqttPort)},
+		{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
+		{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
 	}
-	if cfg.headlessPorts {
-		headlessPorts = append(headlessPorts,
-			corev1.ServicePort{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
-			corev1.ServicePort{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
-		)
-	}
-	// Client-facing: cluster port so controller/agents can configure NATS routes (e.g. agent node in server mode).
+	// Client-facing: cluster, leaf, mqtt (LB/ingress and spec.services.nats apply here).
 	clientPorts := []corev1.ServicePort{
 		{Name: "cluster", Port: int32(nats.DefaultClusterPort), TargetPort: intstr.FromInt(nats.DefaultClusterPort)},
 		{Name: "leaf", Port: int32(nats.DefaultLeafPort), TargetPort: intstr.FromInt(nats.DefaultLeafPort)},
 		{Name: "mqtt", Port: int32(nats.DefaultMqttPort), TargetPort: intstr.FromInt(nats.DefaultMqttPort)},
 	}
-	if !cfg.headlessPorts {
-		clientPorts = append(clientPorts,
-			corev1.ServicePort{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
-			corev1.ServicePort{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
-		)
+	// nats-server: client and monitor only (ClusterIP).
+	serverPorts := []corev1.ServicePort{
+		{Name: "client", Port: int32(nats.DefaultServerPort), TargetPort: intstr.FromInt(nats.DefaultServerPort)},
+		{Name: "monitor", Port: int32(nats.DefaultHttpPort), TargetPort: intstr.FromInt(nats.DefaultHttpPort)},
 	}
 
 	storageQuantity := resource.MustParse(cfg.storageSize)
@@ -1063,7 +1078,8 @@ func newNatsMicroservice(cfg natsMicroserviceConfig) *microservice {
 		labels:                 map[string]string{"datasance.com/component": "nats"},
 		services: []service{
 			{name: nats.HeadlessServiceName, serviceType: "ClusterIP", headless: true, ports: headlessPorts},
-			{name: nats.ClientServiceName, serviceType: cfg.serviceType, serviceAnnotations: cfg.serviceAnnotations, trafficPolicy: getTrafficPolicy(cfg.serviceType), ports: clientPorts},
+			{name: nats.ClientServiceName, serviceType: cfg.serviceType, serviceAnnotations: cfg.serviceAnnotations, trafficPolicy: getTrafficPolicy(cfg.serviceType, cfg.externalTrafficPolicy), ports: clientPorts},
+			{name: nats.ServerServiceName, serviceType: cfg.serverServiceType, serviceAnnotations: cfg.serverServiceAnnotations, trafficPolicy: getTrafficPolicy(cfg.serverServiceType, cfg.serverExternalTrafficPolicy), headless: false, ports: serverPorts},
 		},
 		volumes: []corev1.Volume{
 			{Name: "config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: nats.ConfigMapName}}}},
@@ -1087,7 +1103,9 @@ func newNatsMicroservice(cfg natsMicroserviceConfig) *microservice {
 				},
 				env: []corev1.EnvVar{
 					{Name: "NATS_CONF", Value: "/etc/nats/config/server.conf"},
-					{Name: "NATS_JWT_DIR", Value: "/etc/nats/jwt"},
+					{Name: "NATS_SERVER_MODE", Value: "server"},
+					{Name: "NATS_JWT_DIR", Value: "/home/runner/nats/jwt"},
+					{Name: "NATS_JWT_MOUNT_DIR", Value: "/tmp/nats/jwt"},
 					{Name: "NATS_CREDS_DIR", Value: "/etc/nats/creds"},
 					{Name: "NATS_SYS_USER_CRED_PATH", Value: "/etc/nats/creds/admin-hub.creds"},
 					{Name: "NATS_SSL_DIR", Value: "/etc/nats/certs"},
@@ -1106,7 +1124,7 @@ func newNatsMicroservice(cfg natsMicroserviceConfig) *microservice {
 				},
 				volumeMounts: []corev1.VolumeMount{
 					{Name: "config", MountPath: "/etc/nats/config"},
-					{Name: "jwt", MountPath: "/etc/nats/jwt"},
+					{Name: "jwt", MountPath: "/tmp/nats/jwt"},
 					{Name: "nats-site-server", MountPath: "/etc/nats/certs/nats-site-server"},
 					{Name: "nats-mqtt-server", MountPath: "/etc/nats/certs/nats-mqtt-server"},
 					{Name: "jetstream-key", MountPath: "/etc/nats/jetstream", ReadOnly: true},
@@ -1330,10 +1348,17 @@ func getCAValue(ca *string) string {
 	return *ca
 }
 
-func getTrafficPolicy(serviceType string) string {
+// getTrafficPolicy returns the externalTrafficPolicy for a service. When override is set to "Local" or "Cluster" it is used;
+// when omitted, LoadBalancer defaults to Local and other types to Cluster (valid K8s values only).
+func getTrafficPolicy(serviceType string, override string) string {
+	if strings.EqualFold(override, string(corev1.ServiceExternalTrafficPolicyTypeLocal)) {
+		return string(corev1.ServiceExternalTrafficPolicyTypeLocal)
+	}
+	if strings.EqualFold(override, string(corev1.ServiceExternalTrafficPolicyTypeCluster)) {
+		return string(corev1.ServiceExternalTrafficPolicyTypeCluster)
+	}
 	if strings.EqualFold(serviceType, string(corev1.ServiceTypeLoadBalancer)) {
 		return string(corev1.ServiceExternalTrafficPolicyTypeLocal)
 	}
-
-	return ""
+	return string(corev1.ServiceExternalTrafficPolicyTypeCluster)
 }

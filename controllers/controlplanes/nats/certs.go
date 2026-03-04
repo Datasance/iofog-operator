@@ -45,8 +45,10 @@ func natsSiteServerHosts(headlessName, namespace string, replicas int, address s
 		hosts += fmt.Sprintf("nats-%d.%s", i, headlessName)
 	}
 	hosts += fmt.Sprintf(",%s.%s.svc.cluster.local", ClientServiceName, namespace)
+	hosts += fmt.Sprintf(",%s.%s.svc.cluster.local", ServerServiceName, namespace)
 	hosts += fmt.Sprintf(",*.%s.%s.svc.cluster.local", headlessName, namespace)
 	hosts += fmt.Sprintf(",nats.%s.svc.cluster.local", namespace)
+	hosts += fmt.Sprintf(",nats-server.%s.svc.cluster.local", namespace)
 	if address != "" {
 		hosts += "," + address
 	}

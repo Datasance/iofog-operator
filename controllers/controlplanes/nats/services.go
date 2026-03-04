@@ -19,18 +19,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// NewNatsHeadlessService creates the headless Service for the NATS StatefulSet.
-// When headlessPorts is true: exposes cluster (6222), monitoring (8222), client (4222).
-// When false: exposes only cluster (6222); client and monitoring are on the client Service.
-func NewNatsHeadlessService(namespace string, labels map[string]string, headlessPorts bool) *corev1.Service {
+// NewNatsHeadlessService creates the headless Service for the NATS StatefulSet (all ports).
+func NewNatsHeadlessService(namespace string, labels map[string]string) *corev1.Service {
 	ports := []corev1.ServicePort{
 		{Name: "cluster", Port: int32(DefaultClusterPort), TargetPort: intstr.FromInt(DefaultClusterPort)},
-	}
-	if headlessPorts {
-		ports = append(ports,
-			corev1.ServicePort{Name: "client", Port: int32(DefaultServerPort), TargetPort: intstr.FromInt(DefaultServerPort)},
-			corev1.ServicePort{Name: "monitor", Port: int32(DefaultHttpPort), TargetPort: intstr.FromInt(DefaultHttpPort)},
-		)
+		{Name: "leaf", Port: int32(DefaultLeafPort), TargetPort: intstr.FromInt(DefaultLeafPort)},
+		{Name: "mqtt", Port: int32(DefaultMqttPort), TargetPort: intstr.FromInt(DefaultMqttPort)},
+		{Name: "client", Port: int32(DefaultServerPort), TargetPort: intstr.FromInt(DefaultServerPort)},
+		{Name: "monitor", Port: int32(DefaultHttpPort), TargetPort: intstr.FromInt(DefaultHttpPort)},
 	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -46,19 +42,14 @@ func NewNatsHeadlessService(namespace string, labels map[string]string, headless
 	}
 }
 
-// NewNatsClientService creates the client-facing Service for NATS (leaf, mqtt; optionally client and monitor when headlessPorts is false).
-func NewNatsClientService(namespace string, labels map[string]string, serviceType corev1.ServiceType, headlessPorts bool, annotations map[string]string) *corev1.Service {
+// NewNatsClientService creates the client-facing Service for NATS (cluster, leaf, mqtt).
+func NewNatsClientService(namespace string, labels map[string]string, serviceType corev1.ServiceType, annotations map[string]string) *corev1.Service {
 	ports := []corev1.ServicePort{
+		{Name: "cluster", Port: int32(DefaultClusterPort), TargetPort: intstr.FromInt(DefaultClusterPort)},
 		{Name: "leaf", Port: int32(DefaultLeafPort), TargetPort: intstr.FromInt(DefaultLeafPort)},
 		{Name: "mqtt", Port: int32(DefaultMqttPort), TargetPort: intstr.FromInt(DefaultMqttPort)},
 	}
-	if !headlessPorts {
-		ports = append(ports,
-			corev1.ServicePort{Name: "client", Port: int32(DefaultServerPort), TargetPort: intstr.FromInt(DefaultServerPort)},
-			corev1.ServicePort{Name: "monitor", Port: int32(DefaultHttpPort), TargetPort: intstr.FromInt(DefaultHttpPort)},
-		)
-	}
-	svc := &corev1.Service{
+	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        ClientServiceName,
 			Namespace:   namespace,
@@ -71,5 +62,23 @@ func NewNatsClientService(namespace string, labels map[string]string, serviceTyp
 			Ports:    ports,
 		},
 	}
-	return svc
+}
+
+// NewNatsServerService creates the nats-server Service (client and monitor ports only, ClusterIP).
+func NewNatsServerService(namespace string, labels map[string]string) *corev1.Service {
+	ports := []corev1.ServicePort{
+		{Name: "client", Port: int32(DefaultServerPort), TargetPort: intstr.FromInt(DefaultServerPort)},
+		{Name: "monitor", Port: int32(DefaultHttpPort), TargetPort: intstr.FromInt(DefaultHttpPort)},
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ServerServiceName,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports:    ports,
+		},
+	}
 }

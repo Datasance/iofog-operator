@@ -18,6 +18,7 @@ import (
 	util "github.com/datasance/iofog-operator/v3/internal/util/certs"
 
 	// "github.com/skupperproject/skupper/pkg/certs"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -126,27 +127,28 @@ func (r *ControlPlaneReconciler) reconcileVaultCredentialsSecret(ctx context.Con
 func (r *ControlPlaneReconciler) reconcileIofogController(ctx context.Context) op.Reconciliation {
 	// Configure Controller
 	config := &controllerMicroserviceConfig{
-		controllerName:     r.cp.Name,
-		replicas:           r.cp.Spec.Replicas.Controller,
-		image:              r.cp.Spec.Images.Controller,
-		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		routerImage:        r.cp.Spec.Images.Router,
-		natsImage:          r.cp.Spec.Images.Nats,
-		natsEnabled:        isNatsEnabled(r.cp),
-		db:                 &r.cp.Spec.Database,
-		auth:               &r.cp.Spec.Auth,
-		serviceType:        r.cp.Spec.Services.Controller.Type,
-		serviceAnnotations: r.cp.Spec.Services.Controller.Annotations,
-		loadBalancerAddr:   r.cp.Spec.Services.Controller.Address,
-		https:              r.cp.Spec.Controller.Https,
-		secretName:         r.cp.Spec.Controller.SecretName,
-		ecn:                r.cp.Spec.Controller.ECNName,
-		pidBaseDir:         r.cp.Spec.Controller.PidBaseDir,
-		ecnViewerPort:      r.cp.Spec.Controller.EcnViewerPort,
-		ecnViewerURL:       r.cp.Spec.Controller.EcnViewerURL,
-		logLevel:           r.cp.Spec.Controller.LogLevel,
-		events:             getEventsIfConfigured(r.cp.Spec.Events),
-		vault:              getVaultIfConfigured(r.cp.Spec),
+		controllerName:        r.cp.Name,
+		replicas:              r.cp.Spec.Replicas.Controller,
+		image:                 r.cp.Spec.Images.Controller,
+		imagePullSecret:       r.cp.Spec.Images.PullSecret,
+		routerImage:           r.cp.Spec.Images.Router,
+		natsImage:             r.cp.Spec.Images.Nats,
+		natsEnabled:           isNatsEnabled(r.cp),
+		db:                    &r.cp.Spec.Database,
+		auth:                  &r.cp.Spec.Auth,
+		serviceType:           r.cp.Spec.Services.Controller.Type,
+		serviceAnnotations:    r.cp.Spec.Services.Controller.Annotations,
+		externalTrafficPolicy: r.cp.Spec.Services.Controller.ExternalTrafficPolicy,
+		loadBalancerAddr:      r.cp.Spec.Services.Controller.Address,
+		https:                 r.cp.Spec.Controller.Https,
+		secretName:            r.cp.Spec.Controller.SecretName,
+		ecn:                   r.cp.Spec.Controller.ECNName,
+		pidBaseDir:            r.cp.Spec.Controller.PidBaseDir,
+		ecnViewerPort:         r.cp.Spec.Controller.EcnViewerPort,
+		ecnViewerURL:          r.cp.Spec.Controller.EcnViewerURL,
+		logLevel:              r.cp.Spec.Controller.LogLevel,
+		events:                getEventsIfConfigured(r.cp.Spec.Events),
+		vault:                 getVaultIfConfigured(r.cp.Spec),
 	}
 
 	ingressConfig := &controllerIngressConfig{
@@ -383,7 +385,7 @@ func (r *ControlPlaneReconciler) getIofogClient(scheme string, host string, port
 
 	iofogClient := iofogclient.New(iofogclient.Options{
 		BaseURL: parsedURL,
-		Timeout: 1,
+		Timeout: 10,
 	})
 
 	if _, err = iofogClient.GetStatus(); err != nil {
@@ -449,11 +451,12 @@ func (r *ControlPlaneReconciler) reconcileRouter(ctx context.Context) op.Reconci
 	// }
 
 	routerMicroservices := newRouterMicroservices(routerMicroserviceConfig{
-		image:              r.cp.Spec.Images.Router,
-		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		serviceType:        r.cp.Spec.Services.Router.Type,
-		serviceAnnotations: r.cp.Spec.Services.Router.Annotations,
-		ha:                 haEnabled,
+		image:                 r.cp.Spec.Images.Router,
+		imagePullSecret:       r.cp.Spec.Images.PullSecret,
+		serviceType:           r.cp.Spec.Services.Router.Type,
+		serviceAnnotations:    r.cp.Spec.Services.Router.Annotations,
+		externalTrafficPolicy: r.cp.Spec.Services.Router.ExternalTrafficPolicy,
+		ha:                    haEnabled,
 	})
 
 	// Use the primary router for service creation and IP resolution
@@ -616,10 +619,6 @@ func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconcili
 		return op.ReconcileWithError(err)
 	}
 
-	headlessPorts := true
-	if r.cp.Spec.Nats != nil && r.cp.Spec.Nats.HeadlessPorts != nil {
-		headlessPorts = *r.cp.Spec.Nats.HeadlessPorts
-	}
 	// PVC uses Gi/Mi (Kubernetes); NATS server.conf uses G/M/T/K (NATS does not support Gi, Mi).
 	storageSizePVC := nats.DefaultStorageSizePVC
 	storageSizeNats := nats.DefaultStorageSize
@@ -633,20 +632,27 @@ func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconcili
 			memoryStoreSizeNats = nats.ToNatsSize(r.cp.Spec.Nats.JetStream.MemoryStoreSize)
 		}
 	}
-	natsSvcType := corev1.ServiceTypeClusterIP
+	natsSvcType := corev1.ServiceTypeLoadBalancer
 	if r.cp.Spec.Services.Nats.Type != "" {
 		natsSvcType = corev1.ServiceType(r.cp.Spec.Services.Nats.Type)
 	}
+	natsServerSvcType := corev1.ServiceTypeLoadBalancer
+	if r.cp.Spec.Services.NatsServer.Type != "" {
+		natsServerSvcType = corev1.ServiceType(r.cp.Spec.Services.NatsServer.Type)
+	}
 	natsMs := newNatsMicroservice(natsMicroserviceConfig{
-		image:              openidutil.GetNatsImage(),
-		imagePullSecret:    r.cp.Spec.Images.PullSecret,
-		replicas:           replicas,
-		storageSize:        storageSizePVC,
-		storageClassName:   "",
-		headlessPorts:      headlessPorts,
-		jetStreamKeySecret: nats.JetStreamKeySecretName(instanceName),
-		serviceType:        string(natsSvcType),
-		serviceAnnotations: r.cp.Spec.Services.Nats.Annotations,
+		image:                       openidutil.GetNatsImage(),
+		imagePullSecret:             r.cp.Spec.Images.PullSecret,
+		replicas:                    replicas,
+		storageSize:                 storageSizePVC,
+		storageClassName:            "",
+		jetStreamKeySecret:          nats.JetStreamKeySecretName(instanceName),
+		serviceType:                 string(natsSvcType),
+		serviceAnnotations:          r.cp.Spec.Services.Nats.Annotations,
+		externalTrafficPolicy:       r.cp.Spec.Services.Nats.ExternalTrafficPolicy,
+		serverServiceType:           string(natsServerSvcType),
+		serverServiceAnnotations:    r.cp.Spec.Services.NatsServer.Annotations,
+		serverExternalTrafficPolicy: r.cp.Spec.Services.NatsServer.ExternalTrafficPolicy,
 	})
 	if r.cp.Spec.Images.Nats != "" {
 		natsMs.containers[0].image = r.cp.Spec.Images.Nats
@@ -737,6 +743,16 @@ func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconcili
 		}
 	}
 
+	// Leaf advertise: same host as natsIngress (createDefaultNatsHub), port = ingress leaf port or 7422
+	leafPort := nats.DefaultLeafPort
+	if r.cp.Spec.Ingresses.Nats.LeafPort > 0 {
+		leafPort = r.cp.Spec.Ingresses.Nats.LeafPort
+	}
+	leafAdvertise := ""
+	if natsAddress != "" {
+		leafAdvertise = fmt.Sprintf("%s:%d", natsAddress, leafPort)
+	}
+
 	// JETSTREAM_DOMAIN = controlplane namespace (Controller: CONTROLLER_NAMESPACE / app.namespace)
 	serverConf := nats.BuildServerConf(nats.ServerConfParams{
 		ServerPort:      nats.DefaultServerPort,
@@ -751,9 +767,10 @@ func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconcili
 		CertName:        nats.NatsSiteServerSecret,
 		MqttCertName:    nats.NatsMqttServerSecret,
 		LeafPort:        nats.DefaultLeafPort,
+		LeafAdvertise:   leafAdvertise,
 		ClusterPort:     nats.DefaultClusterPort,
 		MqttPort:        nats.DefaultMqttPort,
-		JWTDir:          "/etc/nats/jwt",
+		JWTDir:          "/home/runner/nats/jwt",
 		ControllerName:  instanceName,
 		MaxMemoryStore:  memoryStoreSizeNats,
 		MaxFileStore:    storageSizeNats,
@@ -786,6 +803,31 @@ func (r *ControlPlaneReconciler) reconcileNats(ctx context.Context) op.Reconcili
 	}
 	if err := r.Client.Create(ctx, jwtBundle); err != nil && !k8serrors.IsAlreadyExists(err) {
 		return op.ReconcileWithError(err)
+	}
+
+	// When NATS replicas are scaled down, cluster routes are removed from server.conf; NATS requires a restart to drop routes.
+	// Trigger a StatefulSet rolling restart by updating the pod template with restartedAt when current replicas > desired.
+	existingSt := &appsv1.StatefulSet{}
+	getStErr := r.Client.Get(ctx, types.NamespacedName{Name: "nats", Namespace: namespace}, existingSt)
+	if getStErr == nil {
+		existingReplicas := int32(1)
+		if existingSt.Spec.Replicas != nil {
+			existingReplicas = *existingSt.Spec.Replicas
+		}
+		if existingReplicas > replicas {
+			// Scale-down: add restartedAt so StatefulSet controller does a rolling update.
+			ann := make(map[string]string)
+			if existingSt.Spec.Template.Annotations != nil {
+				for k, v := range existingSt.Spec.Template.Annotations {
+					ann[k] = v
+				}
+			}
+			ann["kubectl.kubernetes.io/restartedAt"] = time.Now().UTC().Format(time.RFC3339)
+			natsMs.podTemplateAnnotations = ann
+		} else {
+			// Preserve existing annotations so we don't remove restartedAt and trigger another rollout.
+			natsMs.podTemplateAnnotations = existingSt.Spec.Template.Annotations
+		}
 	}
 
 	// Create StatefulSet via shared microservice flow (same as Deployment for controller/router but with isStatefulSet flag)

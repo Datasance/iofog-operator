@@ -44,6 +44,7 @@ const (
 	JWTBundleCMName     = "iofog-nats-jwt-bundle"
 	HeadlessServiceName = "nats-headless"
 	ClientServiceName   = "nats"
+	ServerServiceName   = "nats-server"
 )
 
 // JetStream key secret name suffix: nats-jetstream-key-<controlplane-name>
@@ -75,7 +76,7 @@ func ToNatsSize(s string) string {
 // server.conf template. Placeholders: $NATS_SERVER_PORT$, $NATS_HTTP_PORT$,
 // $OPERATOR_JWT$, $SYSTEM_ACCOUNT$, $JETSTREAM_DOMAIN$, $JETSTREAM_KEY$, $JETSTREAM_PREV_KEY$,
 // $NATS_CLUSTER_ROUTES$, $NATS_SSL_DIR$, $NATS_CERT_NAME$, $NATS_MQTT_CERT_NAME$,
-// $NATS_LEAF_PORT$, $NATS_CLUSTER_PORT$, $NATS_MQTT_PORT$, $NATS_JWT_DIR$, $CONTROLLER_NAME$,
+// $NATS_LEAF_PORT$, $NATS_LEAF_ADVERTISE$, $NATS_CLUSTER_PORT$, $NATS_MQTT_PORT$, $NATS_JWT_DIR$, $CONTROLLER_NAME$,
 // $MAX_MEMORY_STORE$, $MAX_FILE_STORE$.
 const serverConfTemplate = `port: $NATS_SERVER_PORT$
 server_name: $SELFNAME
@@ -94,13 +95,14 @@ jetstream: {
   max_memory_store: $MAX_MEMORY_STORE$
   max_file_store: $MAX_FILE_STORE$
   cipher: chachapoly
-  key: $JETSTREAM_KEY$
-  prev_encryption_key: $JETSTREAM_PREV_KEY
+  key: "$JETSTREAM_KEY$"
+  prev_encryption_key: "$JETSTREAM_PREV_KEY$"
 }
 
 cluster: {
   name: $CONTROLLER_NAME$
   port: $NATS_CLUSTER_PORT$
+  no_advertise: true
   routes: $NATS_CLUSTER_ROUTES$
   tls: {
     ca_file: "$NATS_SSL_DIR$/$NATS_CERT_NAME$/ca.crt"
@@ -108,19 +110,20 @@ cluster: {
     key_file: "$NATS_SSL_DIR$/$NATS_CERT_NAME$/tls.key"
     handshake_first: true
     verify: true
-    timeout: 2
+    timeout: "3s"
   }
 }
 
 leafnodes: {
   port: $NATS_LEAF_PORT$
+  advertise: $NATS_LEAF_ADVERTISE$
   tls: {
     ca_file: "$NATS_SSL_DIR$/$NATS_CERT_NAME$/ca.crt"
     cert_file: "$NATS_SSL_DIR$/$NATS_CERT_NAME$/tls.crt"
     key_file: "$NATS_SSL_DIR$/$NATS_CERT_NAME$/tls.key"
-    handshake_first: true
     verify: true
-    timeout: 2
+	handshake_first: true
+    timeout: "3s"
   }
 }
 
@@ -131,7 +134,7 @@ mqtt: {
     cert_file: "$NATS_SSL_DIR$/$NATS_MQTT_CERT_NAME$/tls.crt"
     key_file: "$NATS_SSL_DIR$/$NATS_MQTT_CERT_NAME$/tls.key"
     handshake_first: true
-    timeout: 2
+    timeout: "3s"
   }
 }
 
@@ -157,12 +160,20 @@ type ServerConfParams struct {
 	CertName        string
 	MqttCertName    string
 	LeafPort        int
+	LeafAdvertise   string
 	ClusterPort     int
 	MqttPort        int
 	JWTDir          string
 	ControllerName  string
 	MaxMemoryStore  string
 	MaxFileStore    string
+}
+
+// escapeConfString escapes double quotes in s for use inside a double-quoted NATS config value.
+// Caller must wrap the result in quotes in the template (e.g. key: "$JETSTREAM_KEY$") so values
+// that look like numbers (e.g. base64 "2E6...") or contain special characters are parsed as strings.
+func escapeConfString(s string) string {
+	return strings.ReplaceAll(s, `"`, `\"`)
 }
 
 // BuildServerConf returns server.conf content with placeholders replaced.
@@ -175,12 +186,14 @@ func BuildServerConf(p ServerConfParams) string {
 		"$OPERATOR_JWT$", p.OperatorJWT,
 		"$SYSTEM_ACCOUNT$", p.SystemAccount,
 		"$JETSTREAM_DOMAIN$", p.JetStreamDomain,
-		"$JETSTREAM_KEY$", p.JetStreamKey,
+		"$JETSTREAM_KEY$", escapeConfString(p.JetStreamKey),
+		"$JETSTREAM_PREV_KEY$", escapeConfString(p.JetStreamPrev),
 		"$NATS_CLUSTER_ROUTES$", p.ClusterRoutes,
 		"$NATS_SSL_DIR$", p.SSLDir,
 		"$NATS_CERT_NAME$", p.CertName,
 		"$NATS_MQTT_CERT_NAME$", p.MqttCertName,
 		"$NATS_LEAF_PORT$", fmt.Sprintf("%d", p.LeafPort),
+		"$NATS_LEAF_ADVERTISE$", p.LeafAdvertise,
 		"$NATS_CLUSTER_PORT$", fmt.Sprintf("%d", p.ClusterPort),
 		"$NATS_MQTT_PORT$", fmt.Sprintf("%d", p.MqttPort),
 		"$NATS_JWT_DIR$", p.JWTDir,

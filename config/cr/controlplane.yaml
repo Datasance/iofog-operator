@@ -45,9 +45,11 @@ spec:
     nats:
       type: ClusterIP  # or LoadBalancer when using external NATS clients
       annotations: {}
+    natsServer:  # nats-server service (client + monitor ports, non-TLS); separate from nats for in-cluster config
+      type: ClusterIP
+      annotations: {}
   nats:  # optional; when omitted NATS is enabled with defaults
     enabled: true  # set to false to disable NATS and not register a hub
-    headlessPorts: true  # when true (default), client/monitor ports only on headless service
     jetStream:
       storageSize: "10Gi"  # PVC and max_file_store
       memoryStoreSize: "1Gi"  # max_memory_store

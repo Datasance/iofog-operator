@@ -265,7 +265,7 @@ func newStatefulSet(namespace, instanceName string, ms *microservice) *appsv1.St
 				MatchLabels: labels,
 			},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{Labels: labels, Annotations: ms.podTemplateAnnotations},
 				Spec: corev1.PodSpec{
 					Volumes:         ms.volumes,
 					SecurityContext: ms.securityContext,

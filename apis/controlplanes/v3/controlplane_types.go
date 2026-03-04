@@ -128,12 +128,15 @@ type Services struct {
 	Controller Service `json:"controller,omitempty"`
 	Router     Service `json:"router,omitempty"`
 	Nats       Service `json:"nats,omitempty"`
+	NatsServer Service `json:"natsServer,omitempty"`
 }
 
 type Service struct {
 	Type        string            `json:"type,omitempty"`
 	Address     string            `json:"address,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
+	// ExternalTrafficPolicy for LoadBalancer/NodePort: "Local" or "Cluster". When omitted, LoadBalancer defaults to Local, others to Cluster. Use "Cluster" on local K8s (e.g. OrbStack) if Local causes issues.
+	ExternalTrafficPolicy string `json:"externalTrafficPolicy,omitempty"`
 }
 
 type Images struct {
@@ -245,9 +248,6 @@ type Nats struct {
 	Enabled *bool `json:"enabled,omitempty"`
 	// JetStream storage and memory limits.
 	JetStream NatsJetStream `json:"jetStream,omitempty"`
-	// HeadlessPorts when true (default) exposes client (4222) and monitoring (8222) only on the headless service.
-	// When false, client and monitoring are also on the client-facing Service.
-	HeadlessPorts *bool `json:"headlessPorts,omitempty"`
 }
 
 // ControlPlaneStatus defines the observed state of ControlPlane.

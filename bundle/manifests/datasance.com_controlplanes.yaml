@@ -197,11 +197,6 @@ spec:
                     description: Enabled toggles NATS deployment. When omitted, treated
                       as true.
                     type: boolean
-                  headlessPorts:
-                    description: |-
-                      HeadlessPorts when true (default) exposes client (4222) and monitoring (8222) only on the headless service.
-                      When false, client and monitoring are also on the client-facing Service.
-                    type: boolean
                   jetStream:
                     description: JetStream storage and memory limits.
                     properties:
@@ -244,6 +239,12 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
                       type:
                         type: string
                     type: object
@@ -255,6 +256,29 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
+                      type:
+                        type: string
+                    type: object
+                  natsServer:
+                    properties:
+                      address:
+                        type: string
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
                       type:
                         type: string
                     type: object
@@ -266,6 +290,12 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      externalTrafficPolicy:
+                        description: 'ExternalTrafficPolicy for LoadBalancer/NodePort:
+                          "Local" or "Cluster". When omitted, LoadBalancer defaults
+                          to Local, others to Cluster. Use "Cluster" on local K8s
+                          (e.g. OrbStack) if Local causes issues.'
+                        type: string
                       type:
                         type: string
                     type: object
