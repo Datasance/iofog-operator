@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: ghcr.io/datasance/operator
   newName: ghcr.io/datasance/operator
-  newTag: 3.7.0
+  newTag: 3.7.1
