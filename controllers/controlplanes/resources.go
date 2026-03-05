@@ -73,11 +73,13 @@ func newServices(namespace, instanceName string, ms *microservice) (svcs []*core
 				Annotations: msvcSvc.serviceAnnotations,
 			},
 			Spec: corev1.ServiceSpec{
-				Type:                  corev1.ServiceType(msvcSvc.serviceType),
-				ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyType(msvcSvc.trafficPolicy),
-				LoadBalancerIP:        msvcSvc.loadBalancerAddr,
-				Selector:              labels,
+				Type:           corev1.ServiceType(msvcSvc.serviceType),
+				LoadBalancerIP: msvcSvc.loadBalancerAddr,
+				Selector:       labels,
 			},
+		}
+		if msvcSvc.trafficPolicy != "" {
+			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyType(msvcSvc.trafficPolicy)
 		}
 		if msvcSvc.headless {
 			svc.Spec.ClusterIP = corev1.ClusterIPNone
@@ -104,6 +106,11 @@ func newControllerIngress(namespace, instanceName string, cfg *controllerIngress
 	pathType := networkingv1.PathTypePrefix
 	labels := getStandardLabels("controller", instanceName)
 
+	var ingressClassName *string
+	if cfg.ingressClassName != "" {
+		ingressClassName = &cfg.ingressClassName
+	}
+
 	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "pot-controller",
@@ -112,7 +119,7 @@ func newControllerIngress(namespace, instanceName string, cfg *controllerIngress
 			Annotations: cfg.annotations,
 		},
 		Spec: networkingv1.IngressSpec{
-			IngressClassName: &cfg.ingressClassName,
+			IngressClassName: ingressClassName,
 			TLS: []networkingv1.IngressTLS{
 				{
 					Hosts:      []string{cfg.host},

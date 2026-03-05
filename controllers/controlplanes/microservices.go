@@ -1348,9 +1348,13 @@ func getCAValue(ca *string) string {
 	return *ca
 }
 
-// getTrafficPolicy returns the externalTrafficPolicy for a service. When override is set to "Local" or "Cluster" it is used;
-// when omitted, LoadBalancer defaults to Local and other types to Cluster (valid K8s values only).
+// getTrafficPolicy returns the externalTrafficPolicy for a service. Only LoadBalancer and NodePort
+// may have this field set; for ClusterIP it must be empty. When override is "Local" or "Cluster" it
+// is used; when omitted, LoadBalancer defaults to Local and NodePort to Cluster.
 func getTrafficPolicy(serviceType string, override string) string {
+	if strings.EqualFold(serviceType, string(corev1.ServiceTypeClusterIP)) {
+		return ""
+	}
 	if strings.EqualFold(override, string(corev1.ServiceExternalTrafficPolicyTypeLocal)) {
 		return string(corev1.ServiceExternalTrafficPolicyTypeLocal)
 	}
@@ -1360,5 +1364,8 @@ func getTrafficPolicy(serviceType string, override string) string {
 	if strings.EqualFold(serviceType, string(corev1.ServiceTypeLoadBalancer)) {
 		return string(corev1.ServiceExternalTrafficPolicyTypeLocal)
 	}
-	return string(corev1.ServiceExternalTrafficPolicyTypeCluster)
+	if strings.EqualFold(serviceType, string(corev1.ServiceTypeNodePort)) {
+		return string(corev1.ServiceExternalTrafficPolicyTypeCluster)
+	}
+	return ""
 }
