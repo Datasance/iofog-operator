@@ -117,7 +117,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-03-05T10:05:56Z"
+    createdAt: "2026-03-24T22:17:35Z"
     operators.operatorframework.io/builder: operator-sdk-v1.37.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: iofog-operator.v3.7.1
