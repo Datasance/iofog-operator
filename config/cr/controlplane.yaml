@@ -32,7 +32,7 @@ spec:
     pullSecret: 
     controller:
     router: 
-    nats: ghcr.io/datasance/nats:2.12.4  # NATS server image (optional)
+    nats: ghcr.io/eclipse-iofog/nats:2.12.4  # NATS server image (optional)
   services:
     controller:
       type:  # LoadBalancer / ClusterIP / Node Port .. If it is Cluster IP ingress for Controller need to be defined

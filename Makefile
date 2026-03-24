@@ -1,11 +1,11 @@
 OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
 VERSION = $(shell grep "^version:" PROJECT | head -1 | sed 's/^version: *//' | tr -d '"' | tr -d ' ')
-PREFIX = github.com/datasance/iofog-operator/v3/internal/util
+PREFIX = github.com/eclipse-iofog/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).routerTag=3.7.0
-LDFLAGS += -X $(PREFIX).controllerTag=3.7.0
+LDFLAGS += -X $(PREFIX).controllerTag=3.7.2
 LDFLAGS += -X $(PREFIX).natsTag=2.12.4
-LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
+LDFLAGS += -X $(PREFIX).repo=ghcr.io/eclipse-iofog
 
 export CGO_ENABLED ?= 0
 ifeq (${DEBUG},)
@@ -14,8 +14,8 @@ GOARGS=-gcflags="all=-N -l"
 endif
 
 # Image URL to use all building/pushing image targets
-REGISTRY ?= ghcr.io/datasance
-VERSION_TAG ?= 3.7.1
+REGISTRY ?= ghcr.io/eclipse-iofog
+VERSION_TAG ?= 3.7.2
 IMG ?= $(REGISTRY)/operator:$(VERSION_TAG)
 BUNDLE_IMG ?= $(REGISTRY)/operator-bundle:$(VERSION_TAG)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
@@ -54,7 +54,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from a cluster
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete -f -
 
 deploy: manifests kustomize ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/datasance/operator=$(IMG)
+	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/eclipse-iofog/operator=$(IMG)
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 .PHONY: local-prep
@@ -160,7 +160,7 @@ endif
 .PHONY: bundle
 bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	operator-sdk generate kustomize manifests -q
-	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/datasance/operator=$(IMG)
+	cd config/operator && $(KUSTOMIZE) edit set image ghcr.io/eclipse-iofog/operator=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION_TAG) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 

@@ -1,6 +1,6 @@
 /*
  *  *******************************************************************************
- *  * Copyright (c) 2023 Datasance Teknoloji A.S.
+ *  * Copyright (c) 2023 Contributors to the Eclipse ioFog Project
  *  *
  *  * This program and the accompanying materials are made available under the
  *  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -18,10 +18,10 @@ import (
 	"strconv"
 	"strings"
 
-	cpv3 "github.com/datasance/iofog-operator/v3/apis/controlplanes/v3"
-	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/nats"
-	"github.com/datasance/iofog-operator/v3/controllers/controlplanes/router"
-	"github.com/datasance/iofog-operator/v3/internal/util"
+	cpv3 "github.com/eclipse-iofog/iofog-operator/v3/apis/controlplanes/v3"
+	"github.com/eclipse-iofog/iofog-operator/v3/controllers/controlplanes/nats"
+	"github.com/eclipse-iofog/iofog-operator/v3/controllers/controlplanes/router"
+	"github.com/eclipse-iofog/iofog-operator/v3/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"

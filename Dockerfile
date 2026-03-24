@@ -35,7 +35,7 @@ RUN useradd --uid 10000 runner
 COPY LICENSE /licenses/LICENSE
 COPY --from=builder /bin/iofog-operator /bin/
 LABEL org.opencontainers.image.description=operator
-LABEL org.opencontainers.image.source=https://github.com/datasance/iofog-operator
+LABEL org.opencontainers.image.source=https://github.com/eclipse-iofog/iofog-operator
 LABEL org.opencontainers.image.licenses=EPL2.0
 
 USER 10000
