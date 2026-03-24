@@ -1,4 +1,4 @@
-domain: datasance.com
+domain: iofog.org
 layout: go.kubebuilder.io/v4
 multigroup: true
 projectName: iofog-operator
