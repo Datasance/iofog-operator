@@ -3,7 +3,7 @@ OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 VERSION = $(shell grep "^version:" PROJECT | head -1 | sed 's/^version: *//' | tr -d '"' | tr -d ' ')
 PREFIX = github.com/datasance/iofog-operator/v3/internal/util
 LDFLAGS += -X $(PREFIX).routerTag=3.7.0
-LDFLAGS += -X $(PREFIX).controllerTag=3.7.2
+LDFLAGS += -X $(PREFIX).controllerTag=3.7.3
 LDFLAGS += -X $(PREFIX).natsTag=2.12.4
 LDFLAGS += -X $(PREFIX).repo=ghcr.io/datasance
 
