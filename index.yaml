@@ -9,8 +9,28 @@ entries:
         - name: Eclipse ioFog
           email: iofog-dev@eclipse.org
     apiVersion: v2
+    appVersion: 3.8.0-rc.3
+    created: "2026-07-01T09:33:18.820471723Z"
+    description: Helm chart for the ioFog operator and ControlPlane
+    digest: 209610b1563580f878b761d8d9c130c5f77aa2ebbde424875dcbe0e96d496728
+    home: https://github.com/eclipse-iofog/iofog-operator
+    name: iofog-operator
+    sources:
+    - https://github.com/eclipse-iofog/iofog-operator
+    type: application
+    urls:
+    - https://datasance.github.io/iofog-operator/iofog-operator-3.8.0-rc.3.tgz
+    version: 3.8.0-rc.3
+  - annotations:
+      artifacthub.io/links: |
+        - name: source
+          url: https://github.com/eclipse-iofog/iofog-operator
+      artifacthub.io/maintainers: |
+        - name: Eclipse ioFog
+          email: iofog-dev@eclipse.org
+    apiVersion: v2
     appVersion: 3.8.0-rc.2
-    created: "2026-06-29T13:47:43.700994479Z"
+    created: "2026-07-01T09:33:18.819523147Z"
     description: Helm chart for the ioFog operator and ControlPlane
     digest: 7c8310e6930588de3ed5dbd41d2990dfd4852b7c7db618666be3dfec1cacfb17
     home: https://github.com/eclipse-iofog/iofog-operator
@@ -30,7 +50,7 @@ entries:
           email: iofog-dev@eclipse.org
     apiVersion: v2
     appVersion: 3.8.0-rc.1
-    created: "2026-06-29T13:47:43.700042025Z"
+    created: "2026-07-01T09:33:18.818096173Z"
     description: Helm chart for the ioFog operator and ControlPlane
     digest: d1b7971123cb32403b6d27e99aab6ae0c0a2c7f6380cbb77e25c811195988c49
     home: https://github.com/eclipse-iofog/iofog-operator
@@ -50,7 +70,7 @@ entries:
           email: iofog-dev@eclipse.org
     apiVersion: v2
     appVersion: 3.8.0-beta.1
-    created: "2026-06-29T13:47:43.698723248Z"
+    created: "2026-07-01T09:33:18.817404134Z"
     description: Helm chart for the ioFog operator and ControlPlane
     digest: 0ee5fef57a848ebc9a45daa911627e929ce7d5517aaca08d80340aaac60eca6a
     home: https://github.com/eclipse-iofog/iofog-operator
@@ -61,4 +81,4 @@ entries:
     urls:
     - https://datasance.github.io/iofog-operator/iofog-operator-3.8.0-beta.1.tgz
     version: 3.8.0-beta.1
-generated: "2026-06-29T13:47:43.697930255Z"
+generated: "2026-07-01T09:33:18.81660166Z"
